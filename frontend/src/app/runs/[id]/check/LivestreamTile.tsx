@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { RING_REGIONS, STAGES, STAGE_ACTIONS, STAGE_PATHS } from "@/lib/fixtures";
+import {
+  RING_REGIONS,
+  STAGES,
+  STAGE_ACTIONS,
+  STAGE_PATHS,
+  TILE_CLIPS,
+} from "@/lib/fixtures";
 import { logText } from "@/lib/simulation";
 import type { AgentEvent, AgentState } from "@/lib/types";
 import motion from "@/styles/motion.module.css";
@@ -38,10 +44,12 @@ export function LivestreamTile({
   /** The run is live and this agent has not reported anything yet. */
   booting: boolean;
 }) {
-  // Per-agent capture first, then the shared one, then the skeleton.
-  const sources = [`/tiles/${agent.id}.mp4`, "/tiles/fallback.mp4"];
-  const [sourceIndex, setSourceIndex] = useState(0);
-  const source = sources[sourceIndex];
+  // One clip per tile, chosen by the agent's seat so no two tiles play the
+  // same footage and the choice is stable across re-renders.
+  const seat = Number(agent.id.replace(/\D/g, "")) || 1;
+  const clip = TILE_CLIPS[(seat - 1) % TILE_CLIPS.length];
+  const [clipFailed, setClipFailed] = useState(false);
+  const source = clipFailed || !clip ? undefined : `/tiles/${clip}.mp4`;
 
   // Sessions are now held open for the whole run, so the live view stays valid
   // after an individual agent settles — no need to drop it early.
@@ -124,12 +132,11 @@ export function LivestreamTile({
             muted
             loop
             playsInline
-            onError={() => setSourceIndex((i) => i + 1)}
+            onError={() => setClipFailed(true)}
             onLoadedMetadata={(e) => {
               // Offset each tile into the clip so four copies of the same
               // capture do not play in lockstep.
               const video = e.currentTarget;
-              const seat = Number(agent.id.replace(/\D/g, "")) || 1;
               if (Number.isFinite(video.duration) && video.duration > 0) {
                 video.currentTime = (seat * 2.5) % video.duration;
               }

@@ -1,16 +1,27 @@
 # Livestream tile captures
 
-Drop an mp4 here named after the agent id. Only the four ids in
-`TILE_IDS` (`src/lib/fixtures.ts`) get a tile:
+The clips a tile falls back to when there is no live Browserbase session —
+either because the agent is scripted, or because its session has closed.
 
-    A02.mp4  A03.mp4  A08.mp4  A09.mp4
+One clip per tile, assigned by the agent's seat, so no two tiles play the same
+footage. The manifest is `TILE_CLIPS` in `src/lib/fixtures.ts`; add a file here
+and add its name there.
 
-Each plays muted, looping, `object-fit: cover` inside the tile viewport.
-`muted` is required — browsers block autoplay without it.
+    sephora.mp4  shein.mp4  footlocker.mp4  sweelee.mp4  footlocker2.mp4
 
-A missing file is fine: the tile falls back to the stylized `PageSkeleton`,
-so you can ship with none, some, or all four.
+Each plays muted, looping, `object-fit: cover`, and starts at an offset derived
+from the seat so they do not loop in lockstep. `muted` is required — browsers
+block autoplay without it.
 
-Keep them short (5-15s) and roughly 4:3 — they loop, and the ring, caption
-and log lines are drawn on top, so avoid captures with important detail in
-the bottom strip.
+## Keep them small
+
+Source recordings were ~20 MB each; the tile renders them about 340px wide, so
+that resolution is wasted and it bloats the repo permanently. Re-encode before
+committing:
+
+    avconvert --source raw.mp4 --output clip.m4v --preset PresetAppleM4V480pSD
+    mv clip.m4v frontend/public/tiles/clip.mp4
+
+That took 98 MB down to 8.6 MB with no visible difference at tile size.
+
+A missing file is fine: the tile falls back to the stylized `PageSkeleton`.
