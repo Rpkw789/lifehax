@@ -67,6 +67,8 @@
   border: none;
   text-align: left;
   cursor: pointer;
+  /* The routed rows are anchors now; globals.css underlines every <a>. */
+  text-decoration: none;
 }
 
 .row:hover {

@@ -260,7 +260,7 @@
 
 .sevCritical {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .sevHigh {
