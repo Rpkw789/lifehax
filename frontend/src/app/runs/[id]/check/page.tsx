@@ -159,6 +159,7 @@ export default function CheckScreen() {
                     booting={running && agent.progress === 0 && !agent.blocked}
                     brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
                     events={events.filter((e) => e.agentId === agent.id)}
+                    href={`/runs/${runId}/agents/${agent.id}`}
                   />
                 ))}
               </div>

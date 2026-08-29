@@ -23,13 +23,38 @@ function titleFor(step: StepKey, storeHost: string): string {
   }
 }
 
-export function Header({ step }: { step: StepKey }) {
+/** The workspace sections, which sit outside the four-stage run flow. */
+const SECTIONS: Record<string, { title: string; meta: string }> = {
+  personas: { title: "Agent personas", meta: "the population this run shops with" },
+  history: { title: "Past runs", meta: "every audit on this workspace" },
+  settings: { title: "Settings", meta: "run configuration · capabilities" },
+};
+
+/**
+ * The title strip.
+ *
+ * Pass `step` inside the run flow, or `section` for a workspace screen. One of
+ * the two is always right, so the strip never has to guess.
+ */
+export function Header({
+  step,
+  section,
+}: {
+  step?: StepKey;
+  section?: string | null;
+}) {
   const { runId, storeHost } = useRun();
+
+  const shown = section
+    ? SECTIONS[section]
+    : step
+      ? { title: titleFor(step, storeHost), meta: META[step] }
+      : undefined;
 
   return (
     <div className={styles.header}>
-      <div className={styles.title}>{titleFor(step, storeHost)}</div>
-      <div className={styles.meta}>{META[step]}</div>
+      <div className={styles.title}>{shown?.title ?? "Happy2"}</div>
+      <div className={styles.meta}>{shown?.meta ?? ""}</div>
       <div className={styles.right}>
         <div className={styles.runId}>run {runId}</div>
         <div className={styles.avatar}>TL</div>

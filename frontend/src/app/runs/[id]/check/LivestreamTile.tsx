@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -35,6 +36,7 @@ export function LivestreamTile({
   liveViewUrl,
   booting,
   brief,
+  href,
 }: {
   agent: AgentState;
   /** Every event so far for this agent, oldest first. */
@@ -46,6 +48,8 @@ export function LivestreamTile({
   booting: boolean;
   /** This agent's own shopping brief. */
   brief?: string;
+  /** This agent's own page. The title bar is the way through to it. */
+  href: string;
 }) {
   // One clip per tile, chosen by the agent's seat so no two tiles play the
   // same footage and the choice is stable across re-renders.
@@ -79,7 +83,7 @@ export function LivestreamTile({
 
   return (
     <div className={styles.tile} style={{ borderColor: color }}>
-      <div className={styles.titleBar}>
+      <Link className={styles.titleBar} href={href}>
         <span className={styles.swatch} style={{ background: color }} />
         <span className={styles.agentId}>{agent.id}</span>
         <span className={styles.personaName}>{agent.persona.name}</span>
@@ -102,7 +106,7 @@ export function LivestreamTile({
                 ? `live · ${STAGES[stageIndex]}`
                 : STAGES[stageIndex]}
         </span>
-      </div>
+      </Link>
 
       {brief && <div className={styles.brief}>“{brief}”</div>}
 
