@@ -1,0 +1,141 @@
+/*
+ * A surface column. Four of these sit side by side on Check, each reporting
+ * one way an AI shopper can reach the store.
+ */
+.column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--page);
+  overflow: hidden;
+}
+
+.head {
+  padding: 10px 12px 11px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--strip);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Marks a column whose output is illustrative, not measured. */
+.sim {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.subtitle {
+  margin: 3px 0 9px 14px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--tertiary);
+}
+
+.track {
+  width: 100%;
+}
+
+.verdict {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--secondary);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Console feed */
+.feed {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  background: var(--ground);
+  min-height: 240px;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 34px 22px 1fr;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.time {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag {
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.text {
+  color: var(--secondary);
+  word-break: break-word;
+}
+
+.textFail {
+  color: var(--blocked);
+}
+
+.textMuted {
+  color: var(--tertiary);
+}
+
+.idle {
+  color: var(--faint);
+}
+
+.caret {
+  display: inline-block;
+  width: 5px;
+  height: 10px;
+  background: var(--tertiary);
+}
+
+/* The browser column stacks its tiles rather than rendering a feed. */
+.tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  max-height: 620px;
+  overflow-y: auto;
+}
