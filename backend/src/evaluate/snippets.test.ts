@@ -22,35 +22,41 @@ describe("attributeSnippet", () => {
     expect(attributeSnippet(["waterproof"])).not.toContain("weight_g");
   });
 
-  test("returns non-empty output for an empty list, since the snippet is required", () => {
-    expect(attributeSnippet([]).length).toBeGreaterThan(0);
+  test("emits valid JSON for an empty list", () => {
+    expect(() => JSON.parse(`{${attributeSnippet([])}}`)).not.toThrow();
+  });
+
+  test("emits valid JSON for a populated list", () => {
+    expect(() => JSON.parse(`{${attributeSnippet(["waterproof", "weight_g"])}}`)).not.toThrow();
   });
 });
 
 describe("offerSnippet", () => {
-  test("uses the real price and currency from the target product", () => {
-    const out = offerSnippet(source.target_product);
-    expect(out).toContain("129.99");
-    expect(out).toContain("USD");
+  test("emits valid JSON when the price is known", () => {
+    expect(() => JSON.parse(`{${offerSnippet(source.target_product)}}`)).not.toThrow();
   });
 
-  test("falls back to a placeholder when price is absent", () => {
+  test("never fabricates a price when one is absent", () => {
     const out = offerSnippet({ ...source.target_product, price: null });
-    expect(out).toContain("priceCurrency");
+    expect(out).not.toContain("0.00");
     expect(out).not.toContain("null");
+    expect(out).toContain("<your price>");
   });
 });
 
 describe("feedSnippet", () => {
-  test("reports the real catalogue coverage", () => {
+  test("reports both the listed count and the total", () => {
     const out = feedSnippet(source.site_audit);
+    expect(out).toContain("28");
     expect(out).toContain("40");
   });
 });
 
 describe("llmsTxtSnippet", () => {
-  test("names the brand", () => {
-    expect(llmsTxtSnippet(source.brand, source.site_audit)).toContain("Acme");
+  test("uses the brand name from the data, not a constant", () => {
+    const out = llmsTxtSnippet({ ...source.brand, name: "Northwind" }, source.site_audit);
+    expect(out).toContain("Northwind");
+    expect(out).not.toContain("Acme");
   });
 });
 

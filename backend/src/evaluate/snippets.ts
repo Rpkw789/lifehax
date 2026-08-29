@@ -22,7 +22,7 @@ export function manifestSnippet(): string {
 
 export function attributeSnippet(attributes: string[]): string {
   if (attributes.length === 0) {
-    return '"additionalProperty": []  // add one entry per attribute a buyer would filter on';
+    return '"additionalProperty": []';
   }
   const rows = attributes
     .map((name) => `  { "@type": "PropertyValue", "name": ${JSON.stringify(name)}, "value": "" }`)
@@ -31,13 +31,13 @@ export function attributeSnippet(attributes: string[]): string {
 }
 
 export function offerSnippet(product: TargetProduct): string {
-  const amount = product.price ? product.price.amount.toFixed(2) : "0.00";
-  const currency = product.price ? product.price.currency : "USD";
+  const amount = product.price ? JSON.stringify(product.price.amount.toFixed(2)) : '"<your price>"';
+  const currency = product.price ? JSON.stringify(product.price.currency) : '"<your currency>"';
   return [
     '"offers": {',
     '  "@type": "Offer",',
-    `  "price": ${JSON.stringify(amount)},`,
-    `  "priceCurrency": ${JSON.stringify(currency)},`,
+    `  "price": ${amount},`,
+    `  "priceCurrency": ${currency},`,
     '  "availability": "https://schema.org/InStock"',
     "}",
   ].join("\n");
@@ -47,7 +47,7 @@ export function feedSnippet(audit: SiteAudit): string {
   const { products_listed, products_total } = audit.sitemap;
   return [
     "GET /feeds/products.xml",
-    `  -> ${products_total}/${products_total} SKUs, updated hourly`,
+    `  -> all ${products_total} SKUs, updated hourly`,
     `  (sitemap currently lists ${products_listed} of ${products_total})`,
     "sitemap: include /products/* on publish hook",
   ].join("\n");
