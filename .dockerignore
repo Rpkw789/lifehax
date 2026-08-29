@@ -1,0 +1,16 @@
+# Both images build from the repo root so they can reach shared/, so this is the
+# one ignore file that applies to both.
+.git
+.claude
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+docs
+*.mp4
+deploy.sh
+**/cloudbuild.yaml
+**/Dockerfile
+.dockerignore

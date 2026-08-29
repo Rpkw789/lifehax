@@ -4,6 +4,10 @@
 # exposes service env vars as Docker build args, which is what makes the
 # frontend's build-time NEXT_PUBLIC_API_BASE work without a custom build config.
 #
+# Both services build from the REPO ROOT context (dockerContext: .) because
+# backend/ and frontend/ both import shared/ via tsconfig path aliases
+# (@contracts/*, @fixtures/* -> ../shared/*), which sits outside either package.
+#
 # Deploy: push this file, then New > Blueprint in the Render dashboard.
 services:
   - type: web
@@ -12,7 +16,7 @@ services:
     plan: free
     region: singapore
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       # sync: false = Render prompts for the value and stores it encrypted;
@@ -46,7 +50,7 @@ services:
     plan: free
     region: singapore
     dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./frontend
+    dockerContext: .
     envVars:
       # Must be the backend's full https:// URL. Render has no string
       # concatenation in blueprints and onrender.com subdomains are globally
