@@ -8,10 +8,20 @@ import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
 import styles from "./dashboard.module.css";
 import { Funnel } from "./Funnel";
+import { History } from "./History";
 
 export default function DashboardScreen() {
-  const { runId, agents, events, surfaces, findings, catalogueCount, running, complete } =
-    useRun();
+  const {
+    runId,
+    agents,
+    events,
+    surfaces,
+    findings,
+    catalogueCount,
+    running,
+    complete,
+    input,
+  } = useRun();
 
   // The provider seeds a full agent population before anything runs, so an
   // empty `agents` never signals "no run" — an empty event stream does.
@@ -71,6 +81,11 @@ export default function DashboardScreen() {
         <section>
           <SectionLabel>Where agents dropped out</SectionLabel>
           <Funnel steps={steps} />
+        </section>
+
+        <section>
+          <SectionLabel>Past runs for this store</SectionLabel>
+          <History storeUrl={input.storeUrl} />
         </section>
 
         {surfaces.length > 0 ? (

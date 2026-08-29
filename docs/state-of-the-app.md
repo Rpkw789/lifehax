@@ -1,6 +1,6 @@
 # State of the app
 
-Measured on `main` at `c7f7cec`, not from memory. Reachability is an import
+Measured on `main` at `dff566b`, not from memory. Reachability is an import
 walk from `backend/src/index.ts`; everything else is a grep or a live request.
 
 Rerun the walk with the snippet at the bottom before trusting these numbers —
@@ -46,7 +46,8 @@ claims and what it does.
 
 ### 2. Half the backend never executes
 
-**25 of 50 modules, 2,416 lines, unreachable from `index.ts`.**
+**25 of 52 modules, 2,416 lines, unreachable from `index.ts`.** The two new
+modules are `persistence/`, and both are live.
 
 | Area | Dark modules |
 | --- | --- |
@@ -137,6 +138,19 @@ reachable by `curl` only.
 
 Still missing: re-run, and artifact hosting. The self-verifying loop in
 `SPEC.md` has a backing store now but nothing links one run to a previous one.
+
+## Closed since the first version of this file
+
+- **CI runs the suite before deploying.** `ci.yml` holds the steps; `deploy.yml`
+  calls it, so a deploy and a PR run byte-identical checks.
+- **Runs persist**, so history exists at the API level.
+- **The readiness score is no longer a literal.** Recommend showed a hardcoded
+  `42/100 · Partially reachable` above real findings; the score, the verdict and
+  the summary paragraph beside them now all derive from the run.
+- **Settled agents stop streaming.** A finished agent's tile shows its outcome
+  instead of an idle browser.
+- **`Export findings` does something** — Markdown for a person, JSON for a
+  machine.
 
 ## Decisions this needs
 

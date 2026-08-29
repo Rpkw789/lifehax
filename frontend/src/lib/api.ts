@@ -2,6 +2,7 @@
  * Backend client. One place that knows the API shape, so the screens do not.
  */
 
+import type { RunSummary } from "./history";
 import type {
   AgentEvent,
   Checks,
@@ -24,6 +25,20 @@ export type StreamMessage =
   | { type: "agent"; event: AgentEvent }
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
   | { type: "done"; status: "complete" | "error"; error: string | null };
+
+/** Saved runs, newest first. Used by the dashboard to compare iterations. */
+export async function listRuns(): Promise<RunSummary[]> {
+  const res = await fetch(`${API_BASE}/runs`);
+  const body = (await res.json()) as
+    | { runs: RunSummary[] }
+    | { error: { message: string } };
+  if (!res.ok || !("runs" in body)) {
+    throw new Error(
+      "error" in body ? body.error.message : `backend returned ${res.status}`,
+    );
+  }
+  return body.runs;
+}
 
 export async function createRun(input: RunInput): Promise<string> {
   const res = await fetch(`${API_BASE}/runs`, {
