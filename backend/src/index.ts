@@ -12,7 +12,11 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 
 import { runPopulation } from "./agents";
+import { CloudflareWebSearchClient } from "./agents/cloudflare";
+import { SharedSearchAgent } from "./agents/shared-search";
 import { snapshot } from "./catalogue";
+import { OriginFetcher } from "./catalogue/fetch";
+import { systemHostLookup } from "./catalogue/security";
 import { runChecks } from "./checks";
 import { createEvaluateRoutes } from "./evaluate/api/evaluate";
 import { openFindingsStore } from "./evaluate/store/findings";
@@ -21,6 +25,10 @@ import { llmConfigured } from "./llm";
 import { log, since } from "./log";
 import { generatePersonas } from "./personas";
 import { createRun, finish, getRun, publish, subscribe } from "./store";
+import {
+  createSurfaceEventEmitter,
+  runSurfaceSimulations,
+} from "./surfaces/orchestrate";
 import type { StreamMessage } from "./store";
 import type { Run, RunInput } from "./types";
 
@@ -150,6 +158,12 @@ app.get("/runs/:id/events", (c) => {
     }
     if (run.checks) await send({ type: "checks", checks: run.checks });
     for (const event of run.events) await send({ type: "agent", event });
+    for (const event of run.surfaceEvents) {
+      await send({ type: "surface_simulation", event });
+    }
+    if (run.checkResult) {
+      await send({ type: "check_result", result: run.checkResult });
+    }
     if (run.findings.length > 0) {
       await send({ type: "findings", findings: run.findings, surfaces: run.surfaces });
     }
@@ -241,7 +255,44 @@ async function orchestrate(run: Run): Promise<void> {
   });
   publish(run, { type: "checks", checks });
 
-  await runPopulation(run, catalogue, checks, personas, briefs);
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  const searchAgent = accountId && apiToken
+    ? new SharedSearchAgent(
+        new CloudflareWebSearchClient({ accountId, apiToken }),
+      )
+    : undefined;
+  const fetcher = new OriginFetcher(catalogue.origin, systemHostLookup);
+  const emitSurfaceEvent = createSurfaceEventEmitter((event) => {
+    publish(run, { type: "surface_simulation", event });
+  });
+  const surfaceResult = runSurfaceSimulations(
+    {
+      runId: run.runId,
+      reportId: `report_${run.runId}`,
+      generatedAt: new Date().toISOString(),
+      storeUrl: run.input.storeUrl,
+      testSkus: run.input.testSkus,
+      disabledPersonas: run.input.disabledPersonas,
+      catalogue,
+      checks,
+      personas,
+      briefs,
+      locale: "en-US",
+      currency: "USD",
+      fetcher,
+      acpPath: run.input.agentEndpoint,
+    },
+    {
+      emitForWorker: emitSurfaceEvent,
+      agent: searchAgent,
+    },
+  );
+  const [, checkResult] = await Promise.all([
+    runPopulation(run, catalogue, checks, personas, briefs),
+    surfaceResult,
+  ]);
+  publish(run, { type: "check_result", result: checkResult });
 
   stepAt = Date.now();
   run.surfaces = computeSurfaces(checks);
