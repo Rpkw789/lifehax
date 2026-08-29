@@ -189,6 +189,7 @@ async function runRealAgent(
       // Index only — a key must never reach a log line.
       key: `${keyIndex + 1}/${API_KEYS.length}`,
       brief: persona.prompt.slice(0, 60),
+      entry: short(catalogue.entryUrl),
       session: browser.sessionId
         ? `https://browserbase.com/sessions/${browser.sessionId}`
         : "none",
@@ -199,12 +200,35 @@ async function runRealAgent(
     if (!page) throw new Error("browserbase returned no page");
     const sh = stagehand;
 
-    await page.goto(catalogue.origin);
+    // Start where the user pointed us. If they gave a path, that is the
+    // catalogue as far as this run is concerned.
+    await page.goto(catalogue.entryUrl);
     await dismissOverlays(sh);
 
-    // 1 · discover — find the catalogue from the front page.
+    // 1 · discover — reach a page that actually lists products.
     if (
       !(await stage(run, agentId, 1, async () => {
+        // Poll: a listing rendered client-side has no links in the DOM for the
+        // first second or two, and counting once makes a slow page look empty.
+        let links = await settledProductLinkCount(page);
+
+        // A session occasionally lands on a page that never painted, or gets a
+        // consent wall thrown up after the first dismissal. One reload settles
+        // both, and is far cheaper than losing the agent for the whole run.
+        if (links === 0) {
+          agentLog.debug(`${agentId} saw an empty page, reloading once`);
+          await page.goto(catalogue.entryUrl);
+          await dismissOverlays(sh);
+          links = await settledProductLinkCount(page);
+        }
+
+        // Already on a listing — typically because the store URL named one.
+        // Hunting for a catalogue from here would navigate away from it.
+        if (links >= 3) {
+          agentLog.debug(`${agentId} entry page lists ${links} products`);
+          return;
+        }
+
         const from = await page.url();
         await sh.act(
           "Open the main shop, catalogue, or all-products section of this store.",
@@ -212,9 +236,7 @@ async function runRealAgent(
         const url = await waitForNavigation(page, from);
         await dismissOverlays(sh);
 
-        const links = await productLinkCount(page);
-        // Leaving the homepage is not enough on its own — a store whose only
-        // "catalogue" is the front page still has to list something.
+        links = await settledProductLinkCount(page);
         if (links < 3) {
           throw new Error(
             `no catalogue reachable — ${short(url)} lists ${links} product links`,
@@ -344,6 +366,27 @@ async function dismissOverlays(sh: Stagehand): Promise<void> {
   } catch {
     // Nothing to dismiss is the common case and not a failure.
   }
+}
+
+/**
+ * Product-link count once the page has stopped adding them.
+ *
+ * Polls until the count stops rising, so a client-rendered listing is not
+ * judged empty on the strength of one early look.
+ */
+async function settledProductLinkCount(
+  page: { evaluate: <R>(fn: () => R) => Promise<R> },
+  timeoutMs = 6000,
+): Promise<number> {
+  const deadline = Date.now() + timeoutMs;
+  let best = 0;
+  while (Date.now() < deadline) {
+    const count = await productLinkCount(page);
+    if (count >= 3 && count === best) return count;
+    best = Math.max(best, count);
+    await sleep(700);
+  }
+  return best;
 }
 
 /** How many distinct product links the current page exposes. */

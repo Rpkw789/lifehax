@@ -89,6 +89,10 @@ export interface CatalogueProduct {
 export interface Catalogue {
   domain: string;
   origin: string;
+  /** Where agents start. The store URL as typed, path and all. */
+  entryUrl: string;
+  /** The user pointed at a specific page rather than the store root. */
+  hasPath: boolean;
   products: CatalogueProduct[];
   /** How the product list was obtained, for the audit's discoverability check. */
   source: "products.json" | "sitemap" | "homepage" | "none";
