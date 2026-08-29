@@ -24,16 +24,25 @@ Keys upgrade two things:
 | `BROWSERBASE_API_KEY` | the 3 real browser agents | those 3 report "BROWSERBASE_API_KEY is not set" |
 | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | generated briefs, written findings | archetype briefs, rule-based findings |
 
-Cloudflare token needs **Account > Workers AI > Read**. Account id from
-`npx wrangler whoami`. Browserbase free tier is 3 concurrent browsers and one
-browser-hour total, which is why `HAPPY2_REAL_AGENTS` defaults to 3.
+The Cloudflare token must be an **AI Gateway token** with the `AI Gateway Run`
+permission, created inside the gateway's own Settings — not a general Cloudflare
+API token, which fails with a bare `401` that says nothing about permissions.
+`CLOUDFLARE_GATEWAY_ID` must be the gateway's real name; `default` only works if
+a gateway is literally called that. Account id from `npx wrangler whoami`.
 
-Verify the gateway independently before blaming the app:
+Browserbase's free tier is 3 concurrent browsers and 5 session requests per
+minute per account, which is why `HAPPY2_REAL_AGENTS` defaults to 3.
+
+Verify the gateway independently before blaming the app. This is the same
+endpoint and header `llm.ts` uses — note `cf-aig-authorization`, not
+`Authorization`:
 
 ```sh
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai/v1/messages" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
-  -d '{"model":"anthropic/claude-sonnet-4-5","max_tokens":64,
+curl -X POST \
+  "https://gateway.ai.cloudflare.com/v1/$CLOUDFLARE_ACCOUNT_ID/$CLOUDFLARE_GATEWAY_ID/anthropic/v1/messages" \
+  -H "cf-aig-authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H "anthropic-version: 2023-06-01" -H "Content-Type: application/json" \
+  -d '{"model":"claude-sonnet-5","max_tokens":64,
        "messages":[{"role":"user","content":"say hi"}]}'
 ```
 
