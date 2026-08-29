@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { readLastRunId, writeLastRunId } from "@/lib/last-run";
 import { useRunOptional } from "@/lib/run-context";
 import styles from "./Sidebar.module.css";
 
@@ -43,16 +44,20 @@ interface NavItem {
 }
 
 /**
- * `runId` is what lets the audit row point somewhere. The settings screen is
- * outside any run, so from there the row has no run to go back to and falls
- * back to inert — the same state the unbuilt screens are in.
+ * `runId` is what lets the run-scoped rows point somewhere. The settings screen
+ * is outside any run, so there it comes from the remembered last run instead of
+ * from context. A browser that has never opened a run leaves the run-scoped
+ * rows below inert — the same state the unbuilt screens are in — but the audit
+ * row always resolves, so the rail is never a dead end.
  */
 function navItems(runId: string | null): NavItem[] {
   return [
     {
       label: "Readiness audit",
       icon: "audit",
-      href: runId ? `/runs/${runId}/input` : undefined,
+      // Never inert. With no run to return to this leans on `/`, which
+      // redirects into one — the rail must always have at least one way out.
+      href: runId ? `/runs/${runId}/input` : "/",
       // The run flow, and an agent's own page — but not the run-scoped
       // sections below, which own their own rows.
       owns: (pathname) =>
@@ -101,12 +106,22 @@ function Icon({ name }: { name: keyof typeof ICONS }) {
 /** Remembers the rail across reloads. Cosmetic, so a failure here is ignored. */
 const COLLAPSE_KEY = "happy2.sidebar.collapsed";
 
+/** `null` during the server render, and wherever the browser refuses storage. */
+function storage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function Sidebar() {
   // Optional, not required: the settings screen renders the sidebar with no
   // run in scope.
   const run = useRunOptional();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
 
   // Read after mount: the server has no idea what this browser last chose, and
   // guessing would flash the wrong width.
@@ -116,7 +131,17 @@ export function Sidebar() {
     } catch {
       // Private mode, or site data blocked. The default stands.
     }
+    setLastRunId(readLastRunId(storage()));
   }, []);
+
+  // Record the run while we are inside one, so the settings screen — which has
+  // no run in scope — still has somewhere to send the user back to.
+  const runId = run?.runId ?? null;
+  useEffect(() => {
+    if (!runId) return;
+    writeLastRunId(storage(), runId);
+    setLastRunId(runId);
+  }, [runId]);
 
   const toggle = () => {
     setCollapsed((current) => {
@@ -167,7 +192,7 @@ export function Sidebar() {
 
       <nav className={styles.nav}>
         {!collapsed && <div className={styles.sectionLabel}>Workspace</div>}
-        {navItems(run?.runId ?? null).map((item) => {
+        {navItems(runId ?? lastRunId).map((item) => {
           const active = item.owns?.(pathname) ?? false;
           const className = active
             ? `${styles.row} ${styles.rowActive}`
