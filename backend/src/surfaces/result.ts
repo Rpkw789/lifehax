@@ -42,7 +42,10 @@ export function buildSurfaceCheckResult(
     input.checks.totals.productsChecked,
   );
   const sitemapTotal = Math.max(productsTotal, input.checks.sitemap.productsListed);
-  const targetListed = input.catalogue.source === "sitemap";
+  const targetListed = input.catalogue.sitemapUrls.some(
+    (url) => resourceKey(url) === resourceKey(input.target.canonical_url),
+  );
+  const sitemapMembershipObserved = input.checks.sitemap.found;
   const evidence = uniqueEvidence([
     ...input.protocol.evidence,
     ...input.guide.evidence,
@@ -71,7 +74,10 @@ export function buildSurfaceCheckResult(
       ...toProbe(input.checks.sitemap),
       products_listed: input.checks.sitemap.productsListed,
       products_total: sitemapTotal,
-      missing_product_ids: targetListed ? [] : [input.target.product_id],
+      missing_product_ids:
+        sitemapMembershipObserved && !targetListed
+          ? [input.target.product_id]
+          : [],
     },
     structured_data: {
       products_total: input.checks.totals.productsChecked,

@@ -43,6 +43,48 @@ test("CloudflareWebSearchClient separates cited search from structured ranking",
   assert.equal(result.proposal.candidates[0]?.name, "Alpha");
 });
 
+test("CloudflareWebSearchClient retries one transient gateway response", async () => {
+  let calls = 0;
+  const client = new CloudflareWebSearchClient({
+    accountId: "account",
+    apiToken: "secret-token",
+    transport: async () => {
+      calls += 1;
+      if (calls === 1) return new Response("busy", { status: 503 });
+      return new Response(calls === 2 ? searchSseMessage() : rankingSseMessage(), { status: 200 });
+    },
+  });
+
+  await client.recommend(request());
+  assert.equal(calls, 3);
+});
+
+test("CloudflareWebSearchClient does not retry a permanent client error", async () => {
+  let calls = 0;
+  const client = new CloudflareWebSearchClient({
+    accountId: "account",
+    apiToken: "secret-token",
+    transport: async () => {
+      calls += 1;
+      return new Response("invalid", { status: 400 });
+    },
+  });
+
+  await assert.rejects(client.recommend(request()), /HTTP 400/);
+  assert.equal(calls, 1);
+});
+
+function request() {
+  return {
+    query: "Find an option",
+    locale: "en-SG",
+    currency: "SGD",
+    storeOrigin: "https://shop.example",
+    fetchPage: async (url: string) => ({ url, status: 200, body: "Price: 20 SGD" }),
+    signal: new AbortController().signal,
+  };
+}
+
 function searchSseMessage(): string {
   const result = JSON.stringify({
     type: "content_block_start",

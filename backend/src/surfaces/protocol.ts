@@ -65,18 +65,21 @@ export function assessProtocolDocument(
     };
   }
 
-  if (kind === "ucp") return assessUcp(parsed);
+  if (kind === "ucp") return assessUcp(parsed, document.url);
   return assessAcp(parsed);
 }
 
-function assessUcp(parsed: Record<string, unknown>): ProtocolAssessment {
+function assessUcp(parsed: Record<string, unknown>, documentUrl: string): ProtocolAssessment {
   const profile = parsed.ucp;
   if (
+    !isHttpsUrl(documentUrl) ||
     !isRecord(profile) ||
     typeof profile.version !== "string" ||
     !/^\d{4}-\d{2}-\d{2}$/.test(profile.version) ||
     !isRecord(profile.services) ||
-    !isRecord(profile.capabilities)
+    !isRecord(profile.capabilities) ||
+    !validUcpRegistry(profile.services, "service") ||
+    !validUcpRegistry(profile.capabilities, "capability")
   ) {
     return {
       kind: "ucp",
@@ -102,9 +105,52 @@ function assessUcp(parsed: Record<string, unknown>): ProtocolAssessment {
   };
 }
 
+function validUcpRegistry(
+  registry: Record<string, unknown>,
+  kind: "service" | "capability",
+): boolean {
+  return Object.entries(registry).every(([name, declarations]) =>
+    /^([a-z0-9-]+\.){2,}[a-z0-9_-]+$/i.test(name) &&
+    Array.isArray(declarations) &&
+    declarations.length > 0 &&
+    declarations.every((declaration) => validUcpDeclaration(declaration, kind)),
+  );
+}
+
+function validUcpDeclaration(
+  value: unknown,
+  kind: "service" | "capability",
+): boolean {
+  if (!isRecord(value) || !isDateVersion(value.version) || !isHttpsUrl(value.spec)) {
+    return false;
+  }
+  if (kind === "capability") return isHttpsUrl(value.schema);
+  if (typeof value.transport !== "string" ||
+    !["rest", "mcp", "a2a", "embedded"].includes(value.transport)) {
+    return false;
+  }
+  if (["rest", "mcp", "embedded"].includes(value.transport) && !isHttpsUrl(value.schema)) {
+    return false;
+  }
+  return value.endpoint === undefined || isHttpsUrl(value.endpoint);
+}
+
+function isDateVersion(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isHttpsUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function assessAcp(parsed: Record<string, unknown>): ProtocolAssessment {
   const observableKeys = ["capabilities", "services", "endpoints", "openapi"];
-  const exposed = observableKeys.filter((key) => key in parsed);
+  const exposed = observableKeys.filter((key) => hasCapabilityMaterial(key, parsed[key]));
   if (exposed.length === 0) {
     return {
       kind: "acp",
@@ -112,7 +158,7 @@ function assessAcp(parsed: Record<string, unknown>): ProtocolAssessment {
       supported: false,
       parsed,
       facts: ["The response exposed no observable commerce capability material"],
-      reason: "Document is not a valid ACP capability document",
+      reason: "Document contains no valid commerce capability material",
     };
   }
 
@@ -124,4 +170,33 @@ function assessAcp(parsed: Record<string, unknown>): ProtocolAssessment {
     facts: exposed.map((key) => `ACP document exposes ${key}`),
     reason: null,
   };
+}
+
+function hasCapabilityMaterial(key: string, value: unknown): boolean {
+  if (key === "openapi") {
+    return (typeof value === "string" && value.trim().length > 0) ||
+      (isRecord(value) && Object.keys(value).length > 0);
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.every(validCapabilityValue);
+  }
+  return isRecord(value) && Object.keys(value).length > 0 &&
+    Object.values(value).every(validCapabilityValue);
+}
+
+function validCapabilityValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith("/")) return true;
+    try {
+      const url = new URL(trimmed);
+      return url.protocol === "https:";
+    } catch {
+      return true;
+    }
+  }
+  if (Array.isArray(value)) return value.length > 0 && value.every(validCapabilityValue);
+  if (!isRecord(value)) return false;
+  return Object.keys(value).length > 0 && Object.values(value).every(validCapabilityValue);
 }

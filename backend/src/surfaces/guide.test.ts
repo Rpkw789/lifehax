@@ -33,6 +33,7 @@ describe("parseLlmsTxt", () => {
       },
     ]);
     expect(parsed.target_covered).toBe(true);
+    expect(parsed.structurally_valid).toBe(true);
   });
 
   test("reports missing required title without inventing one", () => {
@@ -43,6 +44,29 @@ describe("parseLlmsTxt", () => {
 
     expect(parsed.title).toBeNull();
     expect(parsed.facts).toContain("Required H1 title is missing");
+    expect(parsed.structurally_valid).toBe(false);
+  });
+
+  test("reports duplicate, unsafe, off-origin, and malformed links", () => {
+    const parsed = parseLlmsTxt(
+      [
+        "# Example Store",
+        "# Duplicate title",
+        "## Resources",
+        "- [Primary](https://example.com/items/primary)",
+        "- [Primary duplicate](https://example.com/items/primary/)",
+        "- [Outside](https://outside.example/item)",
+        "- [Unsafe](javascript:alert(1))",
+        "- [Broken](not a valid url)",
+      ].join("\n"),
+      target,
+    );
+
+    expect(parsed.structurally_valid).toBe(false);
+    expect(parsed.facts).toContain("2 H1 titles found; exactly one is required");
+    expect(parsed.facts).toContain("1 duplicate links found");
+    expect(parsed.facts).toContain("2 unsafe or invalid links found");
+    expect(parsed.facts).toContain("1 off-origin links found");
   });
 });
 

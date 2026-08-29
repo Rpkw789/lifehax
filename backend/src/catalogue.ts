@@ -31,6 +31,7 @@ export async function snapshot(
       products: shopify.slice(0, MAX_PRODUCTS),
       source: "products.json",
       sitemapProductCount: sitemapUrls.length,
+      sitemapUrls,
     };
   }
 
@@ -44,6 +45,7 @@ export async function snapshot(
       products,
       source: "sitemap",
       sitemapProductCount: sitemapUrls.length,
+      sitemapUrls,
     };
   }
 
@@ -61,6 +63,7 @@ export async function snapshot(
     products,
     source: products.length > 0 ? "homepage" : "none",
     sitemapProductCount: sitemapUrls.length,
+    sitemapUrls,
   };
 }
 

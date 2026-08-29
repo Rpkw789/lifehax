@@ -95,6 +95,8 @@ const DEFAULT_INPUT: RunInput = {
   sitemapUrl: "",
   testSkus: "",
   disabledPersonas: [],
+  locale: "en-US",
+  currency: "USD",
 };
 
 export function RunProvider({

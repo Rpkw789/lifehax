@@ -28,6 +28,8 @@ export function inputFixture() {
     sitemapUrl: "",
     testSkus: "",
     disabledPersonas: [],
+    locale: "en-US",
+    currency: "USD",
   };
 }
 

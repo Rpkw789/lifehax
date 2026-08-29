@@ -22,6 +22,7 @@ export interface CompleteJsonOptions {
   apiToken?: string;
   model?: string;
   transport?: LlmTransport;
+  signal?: AbortSignal;
 }
 
 interface ResolvedOptions {
@@ -29,6 +30,7 @@ interface ResolvedOptions {
   apiToken: string;
   model: string;
   transport: LlmTransport;
+  signal?: AbortSignal;
 }
 
 interface MessagesResponse {
@@ -95,6 +97,7 @@ async function sendMessage(
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}/ai/v1/messages`;
   const response = await options.transport(endpoint, {
     method: "POST",
+    signal: options.signal,
     headers: {
       authorization: `Bearer ${options.apiToken}`,
       "content-type": "application/json",
@@ -150,6 +153,7 @@ function resolveOptions(options: CompleteJsonOptions): ResolvedOptions {
       ? configuredModel
       : `anthropic/${configuredModel}`,
     transport: options.transport ?? fetch,
+    ...(options.signal ? { signal: options.signal } : {}),
   };
 }
 

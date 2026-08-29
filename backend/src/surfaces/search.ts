@@ -49,8 +49,8 @@ export async function runWebSearchSimulation(
   try {
     for await (const event of input.agent.run(input.brief, {
       runId: input.context.runId,
-      locale: "en-US",
-      currency: input.context.target.price?.currency ?? "USD",
+      locale: input.context.locale,
+      currency: input.context.currency,
       storeOrigin: new URL(input.context.storeUrl).origin,
       fetchPage: (url, signal) => input.context.fetcher.get(url, signal),
       signal: input.context.signal ?? new AbortController().signal,
@@ -60,13 +60,23 @@ export async function runWebSearchSimulation(
     }
   } catch (error) {
     const code = error instanceof TimeoutError ? "AGENT_TIMEOUT" : "AGENT_ERROR";
+    const failureEvidence = addEvidence(evidence, {
+      kind: "api_call",
+      at: now().toISOString(),
+      url: null,
+      status: null,
+      summary: code === "AGENT_TIMEOUT"
+        ? "Web search worker timed out"
+        : "Web search worker failed",
+      excerpt: null,
+    });
     input.emit(
       "web_search",
       "result",
       code === "AGENT_TIMEOUT"
         ? "Web search timed out without a recommendation"
         : "Web search could not complete",
-      null,
+      failureEvidence.evidence_id,
     );
     return {
       surface: "web_search",
@@ -124,7 +134,10 @@ export async function runWebSearchSimulation(
     targetRank === null
       ? "Deterministic URL matching did not identify the target in ranked results"
       : `Deterministic URL matching placed the target at rank ${targetRank}`,
-    evidence.find((item) => item.url === input.context.target.canonical_url)
+    evidence.find(
+      (item) => item.url !== null &&
+        resourceKey(item.url) === resourceKey(input.context.target.canonical_url),
+    )
       ?.evidence_id ?? null,
   );
   input.emit(
@@ -143,6 +156,11 @@ export async function runWebSearchSimulation(
           : `The target was recommended at rank ${targetRank}`,
       ],
       evidence,
+      target: input.context.target,
+      brief: input.context.brief,
+      locale: input.context.locale,
+      currency: input.context.currency,
+      signal: input.context.signal,
     },
     input.critiqueClient,
   );

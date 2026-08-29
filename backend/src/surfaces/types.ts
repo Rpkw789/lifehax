@@ -15,6 +15,8 @@ export interface SurfaceWorkerContext {
   storeUrl: string;
   target: TargetProduct;
   brief: string;
+  locale: string;
+  currency: string;
   at: string;
   fetcher: DocumentFetcher;
   signal?: AbortSignal;

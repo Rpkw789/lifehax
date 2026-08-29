@@ -33,3 +33,27 @@ test("late SSE subscribers receive ordered surface events before report and done
     body.indexOf("event: done"),
   );
 });
+
+test("events published while replay is active are queued exactly once", async () => {
+  const run = createRun(inputFixture());
+  publish(run, {
+    type: "surface_simulation",
+    event: event("surf_before", 1, "agent_protocol"),
+  });
+
+  const response = await app.fetch(
+    new Request(`http://localhost/runs/${run.runId}/events`),
+  );
+  publish(run, {
+    type: "surface_simulation",
+    event: event("surf_during", 2, "web_search"),
+  });
+  publish(run, { type: "check_result", result: loadExampleCheckResult() });
+  finish(run);
+
+  const body = await response.text();
+  expect(body.match(/"event_id":"surf_before"/g)).toHaveLength(1);
+  expect(body.match(/"event_id":"surf_during"/g)).toHaveLength(1);
+  expect(body.match(/event: check_result/g)).toHaveLength(1);
+  expect(body.match(/event: done/g)).toHaveLength(1);
+});

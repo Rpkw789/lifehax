@@ -76,6 +76,8 @@ export interface RunInput {
   sitemapUrl: string;
   testSkus: string;
   disabledPersonas: number[];
+  locale: string;
+  currency: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +102,8 @@ export interface Catalogue {
   /** How the product list was obtained, for the audit's discoverability check. */
   source: "products.json" | "sitemap" | "homepage" | "none";
   sitemapProductCount: number;
+  /** Product-looking URLs observed in the submitted/default sitemap. */
+  sitemapUrls: string[];
 }
 
 /** One HTTP probe. A missing resource is a finding, not an error. */

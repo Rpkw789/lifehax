@@ -16,6 +16,7 @@ export interface ParsedLlmsTxt {
   sections: { heading: string; links: GuideLink[] }[];
   links: GuideLink[];
   target_covered: boolean;
+  structurally_valid: boolean;
   facts: string[];
 }
 
@@ -28,13 +29,16 @@ export function parseLlmsTxt(
   let title: string | null = null;
   let summary: string | null = null;
   let currentSection: string | null = null;
+  let h1Count = 0;
+  let malformedLinkCount = 0;
   const links: GuideLink[] = [];
   const sectionLinks = new Map<string, GuideLink[]>();
 
   for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!title && /^#\s+/.test(line) && !/^##\s+/.test(line)) {
-      title = line.replace(/^#\s+/, "").trim() || null;
+    if (/^#\s+/.test(line) && !/^##\s+/.test(line)) {
+      h1Count += 1;
+      if (!title) title = line.replace(/^#\s+/, "").trim() || null;
       continue;
     }
     if (!summary && line.startsWith(">")) {
@@ -49,7 +53,10 @@ export function parseLlmsTxt(
       continue;
     }
     const match = line.match(MARKDOWN_LINK);
-    if (!match?.[1] || !match[2]) continue;
+    if (!match?.[1] || !match[2]) {
+      if (/^\s*(?:[-*]\s+)?\[/.test(line)) malformedLinkCount += 1;
+      continue;
+    }
     const link: GuideLink = {
       label: match[1].trim(),
       url: match[2].trim(),
@@ -60,11 +67,31 @@ export function parseLlmsTxt(
     if (currentSection) sectionLinks.get(currentSection)?.push(link);
   }
 
-  const targetKey = resourceKey(target.canonical_url);
-  const targetCovered = links.some((link) => resourceKey(link.url) === targetKey);
+  const origin = new URL(target.canonical_url).origin;
+  const linkKeys = links.map((link) => resourceKey(link.url, origin));
+  const targetKey = resourceKey(target.canonical_url, origin);
+  const targetCovered = linkKeys.some((key) => key === targetKey);
+  const safeKeys = linkKeys.filter((key): key is string => key !== null);
+  const duplicateCount = safeKeys.length - new Set(safeKeys).size;
+  const unsafeCount = links.length - safeKeys.length + malformedLinkCount;
+  const offOriginCount = links.filter((link) => {
+    const resolved = safeHttpUrl(link.url, origin);
+    return resolved !== null && resolved.origin !== origin;
+  }).length;
+  const structurallyValid = h1Count === 1 && unsafeCount === 0;
   const facts = [
-    title ? `H1 title: ${title}` : "Required H1 title is missing",
+    h1Count === 1 && title
+      ? `H1 title: ${title}`
+      : h1Count === 0
+        ? "Required H1 title is missing"
+        : `${h1Count} H1 titles found; exactly one is required`,
+    summary ? "Summary blockquote is present" : "Summary blockquote is absent",
+    `${body.length} characters in llms.txt`,
+    `${sectionLinks.size} H2 link sections parsed`,
     `${links.length} Markdown links parsed`,
+    `${duplicateCount} duplicate links found`,
+    `${unsafeCount} unsafe or invalid links found`,
+    `${offOriginCount} off-origin links found`,
     targetCovered
       ? `Target product is linked directly: ${target.name}`
       : `Target product is not linked directly: ${target.name}`,
@@ -79,6 +106,7 @@ export function parseLlmsTxt(
     })),
     links,
     target_covered: targetCovered,
+    structurally_valid: structurallyValid,
     facts,
   };
 }
@@ -98,7 +126,7 @@ export function selectRelevantGuideLinks(
     .filter(({ link, score }) => score > 0 && isSameHttpOrigin(link.url, expectedOrigin))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, Math.max(0, limit))
-    .map(({ link }) => new URL(link.url).href);
+    .map(({ link }) => new URL(link.url, expectedOrigin).href);
 }
 
 function relevance(
@@ -124,24 +152,25 @@ function tokens(value: string): Set<string> {
 }
 
 function isSameHttpOrigin(rawUrl: string, origin: string): boolean {
-  try {
-    const url = new URL(rawUrl);
-    return (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      url.origin === origin
-    );
-  } catch {
-    return false;
-  }
+  return safeHttpUrl(rawUrl, origin)?.origin === origin;
 }
 
-function resourceKey(rawUrl: string): string | null {
-  try {
-    const url = new URL(rawUrl);
+function resourceKey(rawUrl: string, origin: string): string | null {
+  const url = safeHttpUrl(rawUrl, origin);
+  if (url) {
     const pathname = url.pathname.length > 1
       ? url.pathname.replace(/\/+$/, "")
       : url.pathname;
     return `${url.origin}${pathname}`;
+  }
+  return null;
+}
+
+function safeHttpUrl(rawUrl: string, origin: string): URL | null {
+  try {
+    if (/\s/.test(rawUrl.trim())) return null;
+    const url = new URL(rawUrl, origin);
+    return url.protocol === "http:" || url.protocol === "https:" ? url : null;
   } catch {
     return null;
   }

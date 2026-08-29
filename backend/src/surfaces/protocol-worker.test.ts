@@ -17,7 +17,9 @@ test("does not ask the model to critique HTML soft-404 protocol responses", asyn
         category: null,
         price: null,
       },
-      brief: "Find a well-documented option",
+    brief: "Find a well-documented option",
+    locale: "en-SG",
+    currency: "SGD",
       at: "2026-08-29T10:25:03.114Z",
       fetcher: {
         async get(url: string) {

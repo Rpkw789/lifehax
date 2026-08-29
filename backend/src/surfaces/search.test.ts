@@ -30,6 +30,7 @@ describe("runWebSearchSimulation", () => {
       kind: "shared-search",
       model: "anthropic/test-model",
       async *run(persona, context) {
+        const citedTarget = "https://www.example.com/items/primary/";
         const base = {
           run_id: context.runId,
           query_id: persona.query_id,
@@ -40,8 +41,8 @@ describe("runWebSearchSimulation", () => {
         yield { ...base, type: "agent.api", endpoint: "messages", latency_ms: 12 };
         yield { ...base, type: "agent.citation", title: "Option A", url: "https://first.example/a", position: 1 };
         yield { ...base, type: "agent.citation", title: "Option B", url: "https://second.example/b", position: 2 };
-        yield { ...base, type: "agent.citation", title: "Primary item", url: target.canonical_url, position: 3 };
-        yield { ...base, type: "agent.fetch", url: target.canonical_url, status: 200, error_code: null };
+        yield { ...base, type: "agent.citation", title: "Primary item", url: citedTarget, position: 3 };
+        yield { ...base, type: "agent.fetch", url: citedTarget, status: 200, error_code: null };
         yield {
           ...base,
           type: "agent.verdict",
@@ -49,7 +50,7 @@ describe("runWebSearchSimulation", () => {
             candidates: [
               { name: "Option A", url: "https://first.example/a", reason_codes: [] },
               { name: "Option B", url: "https://second.example/b", reason_codes: [] },
-              { name: target.name, url: target.canonical_url, reason_codes: [] },
+              { name: target.name, url: citedTarget, reason_codes: [] },
             ],
             purchase_intent: "medium",
             confidence: 0.8,
@@ -78,6 +79,7 @@ describe("runWebSearchSimulation", () => {
     expect(result.run.outcome.target_recommended).toBe(true);
     expect(result.critique?.summary).toContain("two alternatives ranked first");
     expect(surfaceEvents.some((event) => event.phase === "match")).toBe(true);
+    expect(surfaceEvents.find((event) => event.phase === "match")?.evidence_id).not.toBeNull();
     expect(surfaceEvents.at(-1)?.phase).toBe("result");
   });
 
@@ -111,6 +113,8 @@ function workerContext() {
     storeUrl: "https://example.com",
     target,
     brief: brief.query,
+    locale: "en-SG",
+    currency: "SGD",
     at: "2026-08-29T10:25:03.114Z",
     fetcher: {
       async get(url: string) {

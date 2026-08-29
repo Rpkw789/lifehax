@@ -6,6 +6,7 @@ import {
 import type { ShopperAgent } from "../agents/types.ts";
 import type { DocumentFetcher } from "../catalogue/snapshot.ts";
 import type { PersonaBrief } from "../personas/generate.ts";
+import { TimeoutError, withTimeout } from "../runs/retry.ts";
 import type { Catalogue, Checks, Persona } from "../types.ts";
 import type { SurfaceCritiqueClient } from "./critique.ts";
 import { runGuideSimulation } from "./guide-worker.ts";
@@ -55,6 +56,7 @@ export interface SurfaceSimulationDependencies {
   protocolWorker?: StandardWorker;
   guideWorker?: StandardWorker;
   searchWorker?: SearchWorker;
+  workerTimeoutMs?: number;
 }
 
 export async function runSurfaceSimulations(
@@ -68,6 +70,8 @@ export async function runSurfaceSimulations(
     storeUrl: input.catalogue.entryUrl,
     target,
     brief: brief.query,
+    locale: input.locale,
+    currency: input.currency,
     at: input.generatedAt,
     fetcher: input.fetcher,
     signal: input.signal,
@@ -91,9 +95,9 @@ export async function runSurfaceSimulations(
     }));
 
   const [protocol, guide, search] = await Promise.all([
-    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker),
-    settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker),
-    settleSearch(context, brief, dependencies, searchWorker),
+    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker, dependencies.workerTimeoutMs ?? 45_000),
+    settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker, dependencies.workerTimeoutMs ?? 45_000),
+    settleSearch(context, brief, dependencies, searchWorker, dependencies.workerTimeoutMs ?? 45_000),
   ]);
 
   return buildSurfaceCheckResult({
@@ -173,7 +177,10 @@ function selectBrief(
   const enabledIndex = briefs.findIndex(
     (_brief, index) => !disabledPersonas.includes(Math.floor(index / 2)),
   );
-  const index = enabledIndex >= 0 ? enabledIndex : 0;
+  if (enabledIndex < 0) {
+    throw new Error("surface simulations require an enabled shopper brief");
+  }
+  const index = enabledIndex;
   const query = briefs[index]?.trim();
   if (!query) throw new Error("surface simulations require a shopper brief");
   const persona = personas[Math.floor(index / 2)];
@@ -192,15 +199,44 @@ async function settleStandard(
   context: SurfaceWorkerContext,
   emit: SurfaceEventEmitter,
   worker: StandardWorker,
+  timeoutMs: number,
 ): Promise<SurfaceWorkerResult> {
+  const gated = gateEmitter(emit, context.at);
   try {
-    return await worker(context, emit);
-  } catch {
-    emit(surface, "result", "Simulation settled: Unable to verify", null);
+    const result = await withTimeout(
+      (signal) => worker({ ...context, signal }, gated.emit),
+      timeoutMs,
+      surface,
+      context.signal,
+    );
+    gated.close();
+    return result;
+  } catch (error) {
+    gated.close();
+    const timedOut = error instanceof TimeoutError;
+    const evidence = [{
+      evidence_id: `ev_${surface}_degraded`,
+      kind: "api_call" as const,
+      at: context.at,
+      url: null,
+      status: null,
+      summary: timedOut
+        ? `${surface} worker timed out`
+        : `${surface} worker failed before verification completed`,
+      excerpt: null,
+    }];
+    emit(
+      surface,
+      "result",
+      timedOut
+        ? "Simulation settled: Unable to verify before timeout"
+        : "Simulation settled: Unable to verify",
+      evidence[0]!.evidence_id,
+    );
     const origin = new URL(context.storeUrl).origin;
     return {
       surface,
-      evidence: [],
+      evidence,
       probes:
         surface === "model_readable_guide"
           ? {
@@ -235,17 +271,51 @@ async function settleSearch(
   brief: PersonaBrief,
   dependencies: SurfaceSimulationDependencies,
   worker: SearchWorker,
+  timeoutMs: number,
 ): Promise<SearchWorkerResult> {
+  const gated = gateEmitter(dependencies.emitForWorker, context.at);
   try {
-    return await worker(context, dependencies.emitForWorker);
-  } catch {
+    const result = await withTimeout(
+      (signal) => worker({ ...context, signal }, gated.emit),
+      timeoutMs,
+      "web_search",
+      context.signal,
+    );
+    gated.close();
+    return result;
+  } catch (error) {
+    gated.close();
     return runWebSearchSimulation({
       context,
       brief,
-      agent: unavailableSearchAgent,
+      agent: failingSearchAgent(error),
       emit: dependencies.emitForWorker,
     });
   }
+}
+
+function gateEmitter(
+  target: SurfaceEventEmitter,
+  at: string,
+): { emit: SurfaceEventEmitter; close: () => void } {
+  let active = true;
+  return {
+    emit: (surface, phase, message, evidenceId) =>
+      active
+        ? target(surface, phase, message, evidenceId)
+        : {
+            event_id: "surf_ignored_after_settle",
+            sequence: 0,
+            surface,
+            phase,
+            at,
+            message,
+            evidence_id: evidenceId,
+          },
+    close: () => {
+      active = false;
+    },
+  };
 }
 
 const unavailableSearchAgent: ShopperAgent = {
@@ -255,6 +325,18 @@ const unavailableSearchAgent: ShopperAgent = {
     throw new Error("shared search is not configured");
   },
 };
+
+function failingSearchAgent(error: unknown): ShopperAgent {
+  return {
+    kind: "shared-search",
+    model: "unavailable",
+    async *run() {
+      throw error instanceof TimeoutError
+        ? error
+        : new Error("shared search could not complete");
+    },
+  };
+}
 
 function stableProductId(url: URL): string {
   const readable = url.pathname

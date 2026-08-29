@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SurfaceWorkerContext, SurfaceWorkerResult } from "./types.ts";
-import { runSurfaceSimulations } from "./orchestrate.ts";
+import { runSurfaceSimulations, type SurfaceSimulationInput } from "./orchestrate.ts";
 
 test("runs all three methods with the same target and brief and monotonic events", async () => {
   const contexts: SurfaceWorkerContext[] = [];
@@ -82,7 +82,102 @@ test("marks a failed method unavailable while the other simulations settle", asy
   expect(report.agent_runs).toHaveLength(1);
 });
 
-function inputFixture() {
+test("bounds a hung worker and still returns a degraded report", async () => {
+  const report = await runSurfaceSimulations(inputFixture(), {
+    workerTimeoutMs: 5,
+    emitForWorker: (surface, phase, message, evidenceId) => ({
+      event_id: `surf_${surface}_${phase}`,
+      sequence: phase === "result" ? 1 : 0,
+      surface,
+      phase,
+      at: "2026-08-29T10:25:03.114Z",
+      message,
+      evidence_id: evidenceId,
+    }),
+    protocolWorker: async () => new Promise<never>(() => undefined),
+    guideWorker: async () => ({
+      surface: "model_readable_guide",
+      evidence: [],
+      probes: {},
+      critique: null,
+    }),
+    searchWorker: async () => ({
+      surface: "web_search",
+      evidence: [],
+      probes: {},
+      critique: null,
+      run: failedRun(),
+    }),
+  });
+
+  expect(report.site_audit.agent_commerce.note).toBe("Unable to verify");
+  expect(report.evidence.some((item) => item.summary.includes("timed out"))).toBe(true);
+});
+
+test("drops progress emitted by a timed-out worker after it settles", async () => {
+  const messages: string[] = [];
+  await runSurfaceSimulations(inputFixture(), {
+    workerTimeoutMs: 5,
+    emitForWorker: (surface, phase, message, evidenceId) => {
+      messages.push(message);
+      return {
+        event_id: `surf_${messages.length}`,
+        sequence: messages.length,
+        surface,
+        phase,
+        at: "2026-08-29T10:25:03.114Z",
+        message,
+        evidence_id: evidenceId,
+      };
+    },
+    protocolWorker: async (_context, emit) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      emit("agent_protocol", "result", "late protocol result", null);
+      return { surface: "agent_protocol", evidence: [], probes: {}, critique: null };
+    },
+    guideWorker: async () => ({ surface: "model_readable_guide", evidence: [], probes: {}, critique: null }),
+    searchWorker: async () => ({ surface: "web_search", evidence: [], probes: {}, critique: null, run: failedRun() }),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  expect(messages).not.toContain("late protocol result");
+});
+
+test("rejects a run with no enabled shopper brief", async () => {
+  const input = inputFixture();
+  input.disabledPersonas = [0];
+  await expect(
+    runSurfaceSimulations(input, {
+      emitForWorker: () => {
+        throw new Error("workers must not start");
+      },
+    }),
+  ).rejects.toThrow("enabled shopper brief");
+});
+
+test("every surface event evidence reference resolves in the final report", async () => {
+  const evidenceIds: Array<string | null> = [];
+  const report = await runSurfaceSimulations(inputFixture(), {
+    emitForWorker: (surface, phase, message, evidenceId) => {
+      evidenceIds.push(evidenceId);
+      return {
+        event_id: `surf_${evidenceIds.length}`,
+        sequence: evidenceIds.length,
+        surface,
+        phase,
+        at: "2026-08-29T10:25:03.114Z",
+        message,
+        evidence_id: evidenceId,
+      };
+    },
+  });
+  const reportEvidenceIds = new Set(report.evidence.map((item) => item.evidence_id));
+  expect(
+    evidenceIds.filter((id): id is string => id !== null)
+      .every((id) => reportEvidenceIds.has(id)),
+  ).toBe(true);
+});
+
+function inputFixture(): SurfaceSimulationInput {
   const probe = { url: "https://example.com/resource", found: true, status: 200, note: null };
   return {
     runId: "run_surface",
@@ -91,7 +186,7 @@ function inputFixture() {
     storeUrl: "example.com",
     testSkus: "primary",
     disabledPersonas: [],
-    catalogue: { domain: "example.com", origin: "https://example.com", entryUrl: "https://example.com/", hasPath: false, products: [{ url: "https://example.com/items/primary", title: "Primary item", price: "20", attributes: {} }], source: "sitemap" as const, sitemapProductCount: 1 },
+    catalogue: { domain: "example.com", origin: "https://example.com", entryUrl: "https://example.com/", hasPath: false, products: [{ url: "https://example.com/items/primary", title: "Primary item", price: "20", attributes: {} }], source: "sitemap" as const, sitemapProductCount: 1, sitemapUrls: ["https://example.com/items/primary"] },
     checks: { agentCommerce: probe, ucp: probe, llmsTxt: probe, robots: { ...probe, allowsAgents: true }, sitemap: { ...probe, productsListed: 1 }, pages: [], totals: { productsChecked: 0, withJsonLd: 0, withOfferPrice: 0, priceInServedHtml: 0, withCartForm: 0, quantityCapped: 0 }, checkoutWall: { ...probe, requiresAccount: false } },
     personas: [{ name: "Careful shopper", prompt: "Find a well-documented option", color: "#475569", tag: "CAR" }],
     briefs: ["Find a well-documented option"],

@@ -1,5 +1,6 @@
 import type { Evidence, ProbeResult } from "@contracts/check-result";
 import type { FetchedDocument } from "../catalogue/snapshot.ts";
+import { retryOnce } from "../runs/retry.ts";
 import {
   requestSurfaceCritique,
   type SurfaceCritiqueClient,
@@ -82,7 +83,16 @@ export async function runProtocolSimulation(
   if (hasAssessableDocument) {
     emit("agent_protocol", "model", "Critiquing the retrieved protocol evidence", null);
     const result = await requestSurfaceCritique(
-      { surface: "agent_protocol", facts, evidence },
+      {
+        surface: "agent_protocol",
+        facts,
+        evidence,
+        target: context.target,
+        brief: context.brief,
+        locale: context.locale,
+        currency: context.currency,
+        signal: context.signal,
+      },
       options.critiqueClient,
     );
     critique = result.critique;
@@ -117,7 +127,7 @@ async function fetchProtocol(
   emit: SurfaceEventEmitter,
 ): Promise<{ document: FetchedDocument } | null> {
   try {
-    const document = await context.fetcher.get(url, context.signal);
+    const document = await retryOnce(() => context.fetcher.get(url, context.signal));
     const item = addEvidence(evidence, `${kind}_fetch`, {
       kind: "fetch",
       at: context.at,

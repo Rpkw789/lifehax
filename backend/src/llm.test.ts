@@ -86,4 +86,25 @@ describe("completeJson", () => {
     expect(promise).rejects.toBeInstanceOf(LlmError);
     expect(promise).rejects.not.toThrow("token-1");
   });
+
+  test("passes the caller abort signal to Cloudflare", async () => {
+    const controller = new AbortController();
+    let receivedSameSignal = false;
+    await completeJson(
+      "Return JSON.",
+      "Evaluate evidence.",
+      { type: "object" },
+      500,
+      {
+        accountId: "account-1",
+        apiToken: "token-1",
+        signal: controller.signal,
+        transport: async (_input, init) => {
+          receivedSameSignal = init?.signal === controller.signal;
+          return Response.json({ content: [{ type: "text", text: "{}" }] });
+        },
+      },
+    );
+    expect(receivedSameSignal).toBe(true);
+  });
 });

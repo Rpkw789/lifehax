@@ -15,6 +15,24 @@ const evidence = {
 };
 
 describe("validateSurfaceCritique", () => {
+  test("rejects uncited points and unexpected fields", () => {
+    const errors = validateSurfaceCritique(
+      {
+        summary: "Readable but incomplete",
+        strengths: [{ text: "Readable", evidence_ids: [], confidence: 1 }],
+        gaps: [],
+        shopper_impact: [],
+        improvements: [],
+        score: 100,
+      },
+      new Set(["ev_guide_fetch"]),
+    );
+
+    expect(errors).toContain("strengths point must cite at least one evidence id");
+    expect(errors).toContain('strengths point contains unexpected field "confidence"');
+    expect(errors).toContain('critique contains unexpected field "score"');
+  });
+
   test("rejects critique points that invent evidence", () => {
     const errors = validateSurfaceCritique(
       {
@@ -49,6 +67,44 @@ describe("validateSurfaceCritique", () => {
 });
 
 describe("requestSurfaceCritique", () => {
+  test("includes the shared target, brief, locale, and currency in model context", async () => {
+    let prompt = "";
+    await requestSurfaceCritique(
+      {
+        surface: "model_readable_guide",
+        facts: ["Target link is present"],
+        evidence: [evidence],
+        target: {
+          product_id: "item_primary",
+          name: "Primary item",
+          canonical_url: "https://example.com/items/primary",
+          gtin: null,
+          sku: null,
+          category: null,
+          price: { amount: 20, currency: "SGD" },
+        },
+        brief: "Find a well-documented option",
+        locale: "en-SG",
+        currency: "SGD",
+      },
+      async (_system, user) => {
+        prompt = user;
+        return {
+          summary: "Target coverage is explicit.",
+          strengths: [{ text: "The target is linked", evidence_ids: ["ev_guide_fetch"] }],
+          gaps: [],
+          shopper_impact: [],
+          improvements: [],
+        };
+      },
+    );
+
+    expect(prompt).toContain("Find a well-documented option");
+    expect(prompt).toContain("Primary item");
+    expect(prompt).toContain("en-SG");
+    expect(prompt).toContain("SGD");
+  });
+
   test("retries one invalid critique and accepts the corrected response", async () => {
     let calls = 0;
     const result = await requestSurfaceCritique(
@@ -56,6 +112,18 @@ describe("requestSurfaceCritique", () => {
         surface: "model_readable_guide",
         facts: ["Target link is present"],
         evidence: [evidence],
+        target: {
+          product_id: "item_primary",
+          name: "Primary item",
+          canonical_url: "https://example.com/items/primary",
+          gtin: null,
+          sku: null,
+          category: null,
+          price: { amount: 20, currency: "SGD" },
+        },
+        brief: "Find a well-documented option",
+        locale: "en-SG",
+        currency: "SGD",
       },
       async () => {
         calls += 1;
@@ -93,6 +161,18 @@ describe("requestSurfaceCritique", () => {
         surface: "model_readable_guide",
         facts: ["Target link is absent"],
         evidence: [evidence],
+        target: {
+          product_id: "item_primary",
+          name: "Primary item",
+          canonical_url: "https://example.com/items/primary",
+          gtin: null,
+          sku: null,
+          category: null,
+          price: { amount: 20, currency: "SGD" },
+        },
+        brief: "Find a well-documented option",
+        locale: "en-SG",
+        currency: "SGD",
       },
       async () => ({ summary: "missing fields" }),
     );
@@ -100,5 +180,30 @@ describe("requestSurfaceCritique", () => {
     expect(result.source).toBe("fallback");
     expect(result.critique.summary).toContain("Critique unavailable");
     expect(result.critique.gaps[0]?.evidence_ids).toEqual(["ev_guide_fetch"]);
+  });
+
+  test("does not invent an uncited fallback point when no evidence exists", async () => {
+    const result = await requestSurfaceCritique(
+      {
+        surface: "agent_protocol",
+        facts: ["No protocol evidence was returned"],
+        evidence: [],
+        target: {
+          product_id: "item_primary",
+          name: "Primary item",
+          canonical_url: "https://example.com/items/primary",
+          gtin: null,
+          sku: null,
+          category: null,
+          price: null,
+        },
+        brief: "Find a well-documented option",
+        locale: "en-US",
+        currency: "USD",
+      },
+      async () => ({ summary: "invalid" }),
+    );
+
+    expect(result.critique.gaps).toEqual([]);
   });
 });

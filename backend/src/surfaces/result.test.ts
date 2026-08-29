@@ -1,9 +1,27 @@
 import { expect, test } from "bun:test";
 import { validateCheckResult } from "@contracts/validate";
-import { buildSurfaceCheckResult } from "./result.ts";
+import { buildSurfaceCheckResult, type BuildSurfaceCheckResultInput } from "./result.ts";
 
 test("builds one contract-valid report from the shared context", () => {
-  const report = buildSurfaceCheckResult({
+  const report = buildSurfaceCheckResult(reportInput());
+
+  expect(validateCheckResult(report)).toEqual([]);
+  expect(report.evaluation_config.agent_count).toBe(1);
+  expect(report.evaluation_config.queries).toEqual([
+    {
+      query_id: "q_surface_001",
+      text: "Find a well-documented option",
+      intent: "product_discovery",
+    },
+  ]);
+  expect(report.agent_runs).toHaveLength(1);
+  expect(report.site_audit.ucp.found).toBe(true);
+  expect(report.scores.hit_rate).toBe(1);
+  expect(report.site_audit.sitemap.missing_product_ids).toEqual([]);
+});
+
+function reportInput(): BuildSurfaceCheckResultInput {
+  return {
     runId: "run_surface",
     reportId: "report_surface",
     generatedAt: "2026-08-29T10:25:03.114Z",
@@ -24,6 +42,7 @@ test("builds one contract-valid report from the shared context", () => {
       ],
       source: "sitemap",
       sitemapProductCount: 1,
+      sitemapUrls: ["https://example.com/items/primary"],
     },
     checks: checksFixture(),
     target: targetFixture(),
@@ -46,20 +65,25 @@ test("builds one contract-valid report from the shared context", () => {
       critique: null,
     },
     search: searchFixture(),
-  });
+  };
+}
 
-  expect(validateCheckResult(report)).toEqual([]);
-  expect(report.evaluation_config.agent_count).toBe(1);
-  expect(report.evaluation_config.queries).toEqual([
-    {
-      query_id: "q_surface_001",
-      text: "Find a well-documented option",
-      intent: "product_discovery",
-    },
-  ]);
-  expect(report.agent_runs).toHaveLength(1);
-  expect(report.site_audit.ucp.found).toBe(true);
-  expect(report.scores.hit_rate).toBe(1);
+test("uses observed sitemap URLs even when catalogue products came from a feed", () => {
+  const input = reportInput();
+  input.catalogue.source = "products.json";
+  input.catalogue.sitemapUrls = ["https://example.com/items/primary/"];
+  const report = buildSurfaceCheckResult(input);
+  expect(report.site_audit.sitemap.missing_product_ids).toEqual([]);
+});
+
+test("does not assert sitemap absence when sitemap membership was unavailable", () => {
+  const input = reportInput();
+  input.catalogue.source = "products.json";
+  input.catalogue.sitemapUrls = [];
+  input.checks.sitemap.found = false;
+  input.checks.sitemap.status = null;
+  const report = buildSurfaceCheckResult(input);
+  expect(report.site_audit.sitemap.missing_product_ids).toEqual([]);
 });
 
 function targetFixture() {

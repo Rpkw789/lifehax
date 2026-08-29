@@ -13,11 +13,15 @@ credentials and a public store.
 - Agent protocol fetches the configured ACP convention (default
   `/.well-known/agent-commerce`) and `/.well-known/ucp`. HTTP 200 alone is not
   treated as support: HTML soft-404s, malformed JSON, and incomplete UCP
-  profiles settle as unavailable or unsupported.
+  profiles settle as unavailable or unsupported. UCP declarations are checked
+  for dated versions, HTTPS specification/schema URLs, and valid transports;
+  ACP convention documents must contain non-empty, typed capability material.
 - Model-readable guide fetches `/llms.txt`, parses its title, summary, sections,
   links, and direct target coverage, then follows at most three relevant
   same-origin HTTP links for content assessment. Missing files display “Unable
-  to be found”; retrieval failures display “Unable to verify.”
+  to be found”; retrieval failures display “Unable to verify.” Structural facts
+  include H1 count, summary, section/link counts, target coverage, duplicates,
+  unsafe or off-origin links, and followed-link HTTP failures.
 - Web search runs one shared-search shopper brief without adding the audited
   brand, domain, or canonical URL to that brief. Citations and fetched pages are
   matched to the target deterministically; model output never decides discovery,
@@ -28,6 +32,11 @@ credentials and a public store.
 - Surface progress uses the shared append-only `SurfaceSimulationEvent`. The run
   store deduplicates and replays events in sequence order; the frontend performs
   a second idempotent fold for reconnects.
+- Surface workers are independently capped at 45 seconds, inherit cancellation,
+  retry transient retrieval/model failures once, and suppress late events after
+  settlement. The origin fetcher enforces a 1 MB response cap before evidence
+  excerpts are produced. SSE subscribes before taking its replay snapshot, so
+  events published during replay are queued rather than lost.
 - Check renders the three new methods as plain dark consoles with white text.
   Lines appear only when backend milestones happen. Each settled console can
   disclose its relevant report slice, and the page can disclose the complete
@@ -41,7 +50,7 @@ credentials and a public store.
 Recorded tests make no network calls.
 
 ```text
-backend:  141 tests passed, 0 failed; tsc --noEmit passed
+backend:  163 tests passed, 0 failed; tsc --noEmit passed
 frontend:  12 tests passed, 0 failed; tsc --noEmit passed
 frontend:  next build completed successfully
 ```

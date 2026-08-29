@@ -1,4 +1,5 @@
 import type { Evidence, ProbeResult } from "@contracts/check-result";
+import { retryOnce } from "../runs/retry.ts";
 import {
   requestSurfaceCritique,
   type SurfaceCritiqueClient,
@@ -20,7 +21,7 @@ export async function runGuideSimulation(
   const evidence: Evidence[] = [];
   let document;
   try {
-    document = await context.fetcher.get(url, context.signal);
+    document = await retryOnce(() => context.fetcher.get(url, context.signal));
   } catch {
     const failed = addEvidence(evidence, "fetch", {
       kind: "fetch", at: context.at, url, status: null,
@@ -54,16 +55,22 @@ export async function runGuideSimulation(
   emit("model_readable_guide", "validate", parsed.target_covered ? "Target product is linked directly" : "Target product is not linked directly", extraction.evidence_id);
 
   const selected = selectRelevantGuideLinks(parsed, `${context.target.name} ${context.brief}`, new URL(context.storeUrl).origin, 3);
+  let linkedSuccesses = 0;
+  let linkedNonSuccesses = 0;
+  let linkedFailures = 0;
   for (const [index, linkedUrl] of selected.entries()) {
     try {
-      const linked = await context.fetcher.get(linkedUrl, context.signal);
+      const linked = await retryOnce(() => context.fetcher.get(linkedUrl, context.signal));
       const linkedEvidence = addEvidence(evidence, `linked_${String(index + 1).padStart(2, "0")}`, {
         kind: "fetch", at: context.at, url: linked.url, status: linked.status,
         summary: `Fetched llms.txt-linked resource with HTTP ${linked.status}`,
         excerpt: linked.body.replace(/\s+/g, " ").trim().slice(0, 2_000) || null,
       });
       emit("model_readable_guide", "fetch", `Followed relevant guide link: ${linkedUrl} — HTTP ${linked.status}`, linkedEvidence.evidence_id);
+      if (linked.status >= 200 && linked.status < 300) linkedSuccesses += 1;
+      else linkedNonSuccesses += 1;
     } catch {
+      linkedFailures += 1;
       const linkedEvidence = addEvidence(evidence, `linked_${String(index + 1).padStart(2, "0")}`, {
         kind: "fetch", at: context.at, url: linkedUrl, status: null,
         summary: "Unable to verify llms.txt-linked resource", excerpt: null,
@@ -72,9 +79,24 @@ export async function runGuideSimulation(
     }
   }
 
+  const linkedFacts = [
+    `${linkedSuccesses} followed links returned successful HTTP responses`,
+    `${linkedNonSuccesses} followed links returned non-success HTTP statuses`,
+    `${linkedFailures} followed links could not be verified`,
+  ];
+
   emit("model_readable_guide", "model", "Critiquing /llms.txt and its relevant linked content", null);
   const critiqueResult = await requestSurfaceCritique(
-    { surface: "model_readable_guide", facts: parsed.facts, evidence },
+    {
+      surface: "model_readable_guide",
+      facts: [...parsed.facts, ...linkedFacts],
+      evidence,
+      target: context.target,
+      brief: context.brief,
+      locale: context.locale,
+      currency: context.currency,
+      signal: context.signal,
+    },
     options.critiqueClient,
   );
   const modelEvidence = addEvidence(evidence, "critique", {

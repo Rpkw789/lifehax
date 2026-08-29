@@ -97,6 +97,8 @@ app.post("/runs", async (c) => {
     sitemapUrl: body.sitemapUrl ?? "",
     testSkus: body.testSkus ?? "",
     disabledPersonas: body.disabledPersonas ?? [],
+    locale: body.locale?.trim() || "en-US",
+    currency: body.currency?.trim().toUpperCase() || "USD",
   };
 
   const run = createRun(input);
@@ -126,61 +128,95 @@ app.get("/runs/:id/events", (c) => {
 
   return streamSSE(c, async (stream) => {
     let id = 0;
-    const send = (message: StreamMessage) =>
-      stream.writeSSE({
+    const deliveredSurfaceIds = new Set<string>();
+    let deliveredCheckResult = false;
+    let deliveredDone = false;
+    const send = (message: StreamMessage) => {
+      if (message.type === "surface_simulation") {
+        if (deliveredSurfaceIds.has(message.event.event_id)) return Promise.resolve();
+        deliveredSurfaceIds.add(message.event.event_id);
+      }
+      if (message.type === "check_result") {
+        if (deliveredCheckResult) return Promise.resolve();
+        deliveredCheckResult = true;
+      }
+      if (message.type === "done") {
+        if (deliveredDone) return Promise.resolve();
+        deliveredDone = true;
+      }
+      return stream.writeSSE({
         id: String(id++),
         event: message.type,
         data: JSON.stringify(message),
       });
+    };
 
-    // Replay what already happened, so a late subscriber is not missing half
-    // the run. Reconnect-by-Last-Event-ID is not implemented today.
-    if (run.catalogue) {
-      await send({
-        type: "catalogue",
-        products: run.catalogue.products.length,
-        source: run.catalogue.source,
-      });
-    }
-    if (run.personas.length > 0) {
-      await send({ type: "personas", personas: run.personas, briefs: run.briefs });
-    }
-    // Only replay live views that are still alive; a late subscriber must not
-    // be handed a URL whose session has already stopped.
-    if (!run.sessionsClosed) {
-      for (const [agentId, session] of Object.entries(run.sessions)) {
-        if (session.liveViewUrl) {
-          await send({ type: "session", agentId, liveViewUrl: session.liveViewUrl });
-        }
-      }
-    } else {
-      await send({ type: "sessions_closed" });
-    }
-    if (run.checks) await send({ type: "checks", checks: run.checks });
-    for (const event of run.events) await send({ type: "agent", event });
-    for (const event of run.surfaceEvents) {
-      await send({ type: "surface_simulation", event });
-    }
-    if (run.checkResult) {
-      await send({ type: "check_result", result: run.checkResult });
-    }
-    if (run.findings.length > 0) {
-      await send({ type: "findings", findings: run.findings, surfaces: run.surfaces });
-    }
-
-    if (run.status !== "running") {
-      await send({ type: "done", status: run.status, error: run.error });
-      return;
-    }
-
+    // Subscribe before taking the replay snapshot. JavaScript cannot publish
+    // between these synchronous statements, so anything after the snapshot is
+    // queued while replay is in progress instead of falling through a gap.
     const queue: StreamMessage[] = [];
     let wake: (() => void) | null = null;
     const unsubscribe = subscribe(run.runId, (message) => {
       queue.push(message);
       wake?.();
     });
+    const replay = {
+      catalogue: run.catalogue,
+      personas: [...run.personas],
+      briefs: [...run.briefs],
+      sessions: Object.entries(run.sessions),
+      sessionsClosed: run.sessionsClosed,
+      checks: run.checks,
+      events: [...run.events],
+      surfaceEvents: [...run.surfaceEvents],
+      checkResult: run.checkResult,
+      findings: [...run.findings],
+      surfaces: [...run.surfaces],
+      status: run.status,
+      error: run.error,
+    };
 
     try {
+      // Replay what already happened, so a late subscriber is not missing half
+      // the run. Reconnect-by-Last-Event-ID is not implemented today.
+      if (replay.catalogue) {
+        await send({
+          type: "catalogue",
+          products: replay.catalogue.products.length,
+          source: replay.catalogue.source,
+        });
+      }
+      if (replay.personas.length > 0) {
+        await send({ type: "personas", personas: replay.personas, briefs: replay.briefs });
+      }
+      // Only replay live views that are still alive; a late subscriber must not
+      // be handed a URL whose session has already stopped.
+      if (!replay.sessionsClosed) {
+        for (const [agentId, session] of replay.sessions) {
+          if (session.liveViewUrl) {
+            await send({ type: "session", agentId, liveViewUrl: session.liveViewUrl });
+          }
+        }
+      } else {
+        await send({ type: "sessions_closed" });
+      }
+      if (replay.checks) await send({ type: "checks", checks: replay.checks });
+      for (const event of replay.events) await send({ type: "agent", event });
+      for (const event of replay.surfaceEvents) {
+        await send({ type: "surface_simulation", event });
+      }
+      if (replay.checkResult) {
+        await send({ type: "check_result", result: replay.checkResult });
+      }
+      if (replay.findings.length > 0) {
+        await send({ type: "findings", findings: replay.findings, surfaces: replay.surfaces });
+      }
+
+      if (replay.status !== "running") {
+        await send({ type: "done", status: replay.status, error: replay.error });
+        return;
+      }
+
       for (;;) {
         while (queue.length > 0) {
           const message = queue.shift()!;
@@ -278,8 +314,8 @@ async function orchestrate(run: Run): Promise<void> {
       checks,
       personas,
       briefs,
-      locale: "en-US",
-      currency: "USD",
+      locale: run.input.locale,
+      currency: run.input.currency,
       fetcher,
       acpPath: run.input.agentEndpoint,
     },
