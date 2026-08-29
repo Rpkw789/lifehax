@@ -14,10 +14,18 @@ Both services deploy from `render.yaml` at the repo root.
 2. Render dashboard → **New → Blueprint** → pick this repo.
 3. Render reads `render.yaml`, finds both services, and prompts for the values
    marked `sync: false`:
-   - `BROWSERBASE_API_KEY`
+   - `BROWSERBASE_API_KEYS` — comma-separated, no spaces. Browserbase allows 3
+     concurrent browsers per account, so one key per teammate means
+     proportionally more agents really browse; the backend sizes the population
+     from the number of keys.
    - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_API_TOKEN` — an **AI Gateway token** (permission: AI Gateway
+     Run), not a general Cloudflare API token. A general token fails with a
+     bare `401 Authentication error` that does not mention permissions.
    - `NEXT_PUBLIC_API_BASE` — leave blank for now, see step 4
+
+   `CLOUDFLARE_GATEWAY_ID` is set in the blueprint and must match the gateway's
+   real name. `default` only works if a gateway is literally called that.
 4. Once **happy2-backend** is live, copy its URL (`https://….onrender.com`) into
    **happy2-frontend**'s `NEXT_PUBLIC_API_BASE` and redeploy the frontend.
 
@@ -49,8 +57,11 @@ below).
 ### The cost that isn't Render's
 
 Render is free. Anthropic tokens through the Cloudflare AI Gateway and
-Browserbase are not. Browserbase's free tier is **1 browser-hour total**, and
-with `HAPPY2_REAL_AGENTS=3` a single run burns three times its wall-clock. The
+Browserbase are not. Browserbase's free tier is **1 browser-hour per account**,
+and a run burns one browser-hour multiple of its wall-clock per real agent —
+nine agents across three pooled keys spend roughly three hours' worth of
+allowance per hour of demoing, drawn from whichever accounts the keys belong to.
+The
 backend URL is public, so anyone who finds it can spend your quota — delete the
 services when you're done demoing.
 

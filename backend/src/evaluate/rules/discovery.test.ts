@@ -1,0 +1,49 @@
+import { describe, expect, test } from "bun:test";
+import { loadExampleCheckResult } from "../../fixtures";
+import { validateFindings } from "@contracts/validate-findings";
+import { discoverySourcesRule } from "./discovery";
+
+const source = loadExampleCheckResult();
+
+describe("discovery.sources", () => {
+  test("fires for the run that never retrieved the product", () => {
+    const finding = discoverySourcesRule.evaluate(source);
+    expect(finding).not.toBeNull();
+    expect(finding!.derived_from).toEqual(["ar_003"]);
+  });
+
+  test("claims exactly the discovery codes that were observed", () => {
+    const finding = discoverySourcesRule.evaluate(source)!;
+    expect(finding.addresses_failure_codes.sort()).toEqual(["NOT_IN_SEARCH_RESULTS", "NOT_IN_SITEMAP"]);
+  });
+
+  test("its output survives contract validation", () => {
+    const draft = discoverySourcesRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
+  });
+
+  test("carries a non-empty snippet", () => {
+    expect(discoverySourcesRule.evaluate(source)!.recommendation.snippet.length).toBeGreaterThan(0);
+  });
+
+  test("returns null when no discovery code was reported", () => {
+    const clean = loadExampleCheckResult();
+    for (const run of clean.agent_runs) {
+      run.outcome.failure_codes = run.outcome.failure_codes.filter(
+        (e) => e.code !== "NOT_IN_SITEMAP" && e.code !== "NOT_IN_SEARCH_RESULTS",
+      );
+    }
+    expect(discoverySourcesRule.evaluate(clean)).toBeNull();
+  });
+
+  test("claims only the discovery codes actually observed, not both by default", () => {
+    const partial = loadExampleCheckResult();
+    for (const run of partial.agent_runs) {
+      run.outcome.failure_codes = run.outcome.failure_codes.filter(
+        (e) => e.code !== "NOT_IN_SEARCH_RESULTS",
+      );
+    }
+    const finding = discoverySourcesRule.evaluate(partial)!;
+    expect(finding.addresses_failure_codes).toEqual(["NOT_IN_SITEMAP"]);
+  });
+});

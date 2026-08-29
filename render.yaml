@@ -17,18 +17,26 @@ services:
     envVars:
       # sync: false = Render prompts for the value and stores it encrypted;
       # nothing secret is committed to this repo.
-      - key: BROWSERBASE_API_KEY
+      # Comma-separated, no spaces. Browserbase's free tier allows 3 concurrent
+      # browsers PER ACCOUNT, so one key per teammate multiplies how many
+      # agents can really browse. A single key is fine too.
+      - key: BROWSERBASE_API_KEYS
         sync: false
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
       - key: CLOUDFLARE_API_TOKEN
         sync: false
+      # The gateway's real name, not "default" — "default" only works if a
+      # gateway is literally called that, and otherwise every model call fails
+      # with a bare 401. Also note CLOUDFLARE_API_TOKEN must be an AI Gateway
+      # token (permission: AI Gateway Run), not a general Cloudflare API token.
       - key: CLOUDFLARE_GATEWAY_ID
-        value: default
+        value: zun-dev
       - key: HAPPY2_MODEL
         value: claude-sonnet-5
-      - key: HAPPY2_REAL_AGENTS
-        value: "3"
+      # HAPPY2_REAL_AGENTS is deliberately unset: the backend defaults to 3 per
+      # supplied key, so the population scales with however many keys are
+      # configured instead of over-subscribing a single account.
       - key: HAPPY2_STAGE_DELAY_MS
         value: "0"
 

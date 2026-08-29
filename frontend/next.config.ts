@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   // image carries no node_modules. Keeps us inside Artifact Registry's free
   // 0.5 GB.
   output: "standalone",
+  // The dashboard route imports the contracts under shared/, which lives
+  // outside the frontend package root.
+  experimental: { externalDir: true },
 };
 
 export default nextConfig;
