@@ -334,8 +334,19 @@ async function orchestrate(run: Run): Promise<void> {
   });
 
   if (catalogue.products.length === 0 && catalogue.sitemapProductCount === 0) {
-    runLog.error("nothing discoverable, stopping", { store: run.input.storeUrl });
-    finish(run, `no products could be discovered at ${run.input.storeUrl}`);
+    runLog.error("nothing discoverable, stopping", {
+      store: run.input.storeUrl,
+      source: catalogue.source,
+      blockedStatus: catalogue.blockedStatus ?? null,
+    });
+    // Say which of the two it is. "Nothing found" sends the brand looking for a
+    // missing sitemap; a bot wall is the opposite problem and the opposite fix.
+    finish(
+      run,
+      catalogue.source === "blocked"
+        ? `${run.input.storeUrl} answered ${catalogue.blockedStatus} to a non-browser client, so no AI shopping agent can read the catalogue either`
+        : `no products could be discovered at ${run.input.storeUrl}`,
+    );
     return;
   }
 

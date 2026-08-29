@@ -117,8 +117,14 @@ export interface Catalogue {
   /** The user pointed at a specific page rather than the store root. */
   hasPath: boolean;
   products: CatalogueProduct[];
-  /** How the product list was obtained, for the audit's discoverability check. */
-  source: "products.json" | "sitemap" | "homepage" | "none";
+  /**
+   * How the product list was obtained, for the audit's discoverability check.
+   * `blocked` means the store answered a bot wall rather than a catalogue, which
+   * is a different diagnosis from `none` and deserves a different fix.
+   */
+  source: "products.json" | "sitemap" | "homepage" | "none" | "blocked";
+  /** The status the wall answered with, when `source` is `blocked`. */
+  blockedStatus?: number | null;
   sitemapProductCount: number;
   /** Product-looking URLs observed in the submitted/default sitemap. */
   sitemapUrls: string[];

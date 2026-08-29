@@ -40,7 +40,7 @@ export async function get(
       headers: { "user-agent": UA, accept: "*/*" },
     });
     // Cap the read so one enormous page cannot stall the run.
-    const raw = await res.text();
+    const raw = await readBody(res);
     const truncated = raw.length > maxBytes;
     if (LOG_HTTP) {
       httpLog.debug("GET", {
@@ -73,6 +73,34 @@ export async function get(
     };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * The body as text, unwrapping a payload the host gzipped itself.
+ *
+ * `Content-Encoding: gzip` is transport compression and `fetch` has already
+ * undone it by this point. A `.xml.gz` sitemap is different: the *file* is
+ * compressed, it arrives as `application/gzip`, and `res.text()` returns
+ * binary in which no `<loc>` is visible. Best Buy, Chewy and John Lewis all
+ * publish their product sitemaps this way, so treating that as an empty
+ * sitemap loses the entire catalogue.
+ *
+ * Sniffing the gzip magic bytes rather than the file extension or content type
+ * is what keeps this safe: a body `fetch` already decompressed no longer
+ * carries them, so there is nothing here to double-decompress.
+ */
+async function readBody(res: Response): Promise<string> {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (!(bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b)) {
+    return new TextDecoder().decode(bytes);
+  }
+  try {
+    const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream("gzip"));
+    return await new Response(stream).text();
+  } catch {
+    // A truncated or mislabelled archive is worth no more than an empty page.
+    return "";
   }
 }
 
