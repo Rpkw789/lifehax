@@ -37,6 +37,11 @@ services:
         sync: false
       - key: CLOUDFLARE_API_TOKEN
         sync: false
+      # Direct OpenAI Responses API access for the three additional surface
+      # simulations. Render stores this encrypted and never exposes it to the
+      # frontend service.
+      - key: OPENAI_API_KEY
+        sync: false
       # The gateway's real name, not "default" — "default" only works if a
       # gateway is literally called that, and otherwise every model call fails
       # with a bare 401. Also note CLOUDFLARE_API_TOKEN must be an AI Gateway
@@ -45,6 +50,8 @@ services:
         value: zun-dev
       - key: HAPPY2_MODEL
         value: claude-sonnet-5
+      - key: HAPPY2_OPENAI_MODEL
+        value: gpt-5-mini
       # HAPPY2_REAL_AGENTS is deliberately unset: the backend defaults to 3 per
       # supplied key, so the population scales with however many keys are
       # configured instead of over-subscribing a single account.

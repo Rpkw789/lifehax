@@ -7,6 +7,8 @@
  */
 
 import type { AgentEvent, Run, RunInput } from "./types";
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
 const runs = new Map<string, Run>();
 const subscribers = new Map<string, Set<(e: StreamMessage) => void>>();
@@ -20,6 +22,8 @@ export type StreamMessage =
   | { type: "sessions_closed" }
   | { type: "checks"; checks: NonNullable<Run["checks"]> }
   | { type: "agent"; event: AgentEvent }
+  | { type: "surface_simulation"; event: SurfaceSimulationEvent }
+  | { type: "check_result"; result: CheckResult }
   | { type: "findings"; findings: Run["findings"]; surfaces: Run["surfaces"] }
   | { type: "done"; status: Run["status"]; error: string | null };
 
@@ -38,6 +42,8 @@ export function createRun(input: RunInput): Run {
     surfaces: [],
     findings: [],
     events: [],
+    surfaceEvents: [],
+    checkResult: null,
     sessions: {},
     sessionsClosed: false,
   };
@@ -56,6 +62,20 @@ export function tickOf(run: Run): number {
 
 export function publish(run: Run, message: StreamMessage): void {
   if (message.type === "agent") run.events.push(message.event);
+  if (
+    message.type === "surface_simulation" &&
+    !run.surfaceEvents.some(
+      (event) => event.event_id === message.event.event_id,
+    )
+  ) {
+    run.surfaceEvents.push(message.event);
+    run.surfaceEvents.sort(
+      (left, right) =>
+        left.sequence - right.sequence ||
+        left.event_id.localeCompare(right.event_id),
+    );
+  }
+  if (message.type === "check_result") run.checkResult = message.result;
   for (const send of subscribers.get(run.runId) ?? []) send(message);
 }
 

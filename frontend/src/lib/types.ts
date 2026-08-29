@@ -124,6 +124,8 @@ export interface RunInput {
   testSkus: string;
   /** Persona indices that are switched off for this run. */
   disabledPersonas: number[];
+  locale: string;
+  currency: string;
 }
 
 /** A surface score, computed by the backend from the site audit. */

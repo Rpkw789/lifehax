@@ -18,6 +18,8 @@ function aRun(storeUrl: string, overrides: Partial<Run> = {}): Run {
       sitemapUrl: "",
       testSkus: "",
       disabledPersonas: [],
+      locale: "en-US",
+      currency: "USD",
     }),
     ...overrides,
   };
