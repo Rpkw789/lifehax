@@ -21,23 +21,38 @@ const ARCHETYPES = [
 
 const SYSTEM = `You write shopper briefs for a storefront readiness audit.
 
-Given a store's catalogue, write one brief per intent archetype. Each brief is
-what that shopper would type into an AI shopping assistant — first person, in
-their own words, naming concrete attributes drawn from the real catalogue.
+Given a store's catalogue, write TWO briefs per intent archetype — two
+different people who happen to shop the same way. Each brief is what that
+shopper would type into an AI shopping assistant: first person, their own
+words, naming concrete attributes from the real catalogue.
 
 Rules:
 - Ground every brief in products that actually appear in the catalogue.
+- The two briefs for an archetype must want DIFFERENT products, or the same
+  product for visibly different reasons. Never restate one as the other.
+- Vary the shape of the request across the whole set: some name a product,
+  some describe a problem, some ask a question, some give constraints only.
 - Mention real attributes and realistic prices from the catalogue.
 - One or two sentences. No preamble, no quotes around the text.
-- "name" is a 2-3 word label for the shopper, not the product.
+- "name" is a 2-3 word label for the shopper, not the product, and the two
+  shoppers in an archetype get different names.
 
-Write one brief per archetype, in the order given.`;
+Write two briefs per archetype, in the order the archetypes are given.`;
 
 interface Generated {
   archetype: string;
   name: string;
   prompt: string;
 }
+
+/** What a run needs: archetypes for display, one brief per agent. */
+export interface Briefing {
+  personas: Persona[];
+  briefs: string[];
+}
+
+/** Two agents per archetype, so the model is asked for twice as many. */
+const PER_ARCHETYPE = 2;
 
 /** Structured-output contract, so the reply needs no parsing or repair. */
 const PERSONA_SCHEMA: JsonSchema = {
@@ -61,9 +76,9 @@ const PERSONA_SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
-export async function generatePersonas(catalogue: Catalogue): Promise<Persona[]> {
+export async function generatePersonas(catalogue: Catalogue): Promise<Briefing> {
   if (!llmConfigured() || catalogue.products.length === 0) {
-    return fallbackPersonas(catalogue);
+    return fallbackBriefing(catalogue);
   }
 
   const summary = {
@@ -82,21 +97,34 @@ export async function generatePersonas(catalogue: Catalogue): Promise<Persona[]>
       SYSTEM,
       user,
       PERSONA_SCHEMA,
-      2000,
+      3000,
     );
-    return ARCHETYPES.map((arch, i) => {
-      const match =
-        generated.find((g) => g.archetype === arch.key) ?? generated[i];
-      return {
-        name: match?.name?.trim() || titleCase(arch.key),
-        prompt: match?.prompt?.trim() || genericPrompt(arch.key, catalogue),
-        color: arch.color,
-        tag: arch.tag,
-      };
+
+    const personas: Persona[] = [];
+    const briefs: string[] = [];
+
+    ARCHETYPES.forEach((arch, archIndex) => {
+      const mine = generated.filter((g) => g.archetype === arch.key);
+      for (let n = 0; n < PER_ARCHETYPE; n++) {
+        // Fall back through this archetype's own results, then the flat list,
+        // so a model that ignored the grouping still yields distinct briefs.
+        const match = mine[n] ?? generated[archIndex * PER_ARCHETYPE + n];
+        briefs.push(match?.prompt?.trim() || genericPrompt(arch.key, catalogue));
+        if (n === 0) {
+          personas.push({
+            name: match?.name?.trim() || titleCase(arch.key),
+            prompt: match?.prompt?.trim() || genericPrompt(arch.key, catalogue),
+            color: arch.color,
+            tag: arch.tag,
+          });
+        }
+      }
     });
+
+    return { personas, briefs };
   } catch {
     // A failed generation must not kill the run; the audit is the real payload.
-    return fallbackPersonas(catalogue);
+    return fallbackBriefing(catalogue);
   }
 }
 
@@ -104,17 +132,29 @@ export async function generatePersonas(catalogue: Catalogue): Promise<Persona[]>
  * Used when the model is unavailable. Still category-free: the prompts are
  * assembled from whatever this store actually sells.
  */
-function fallbackPersonas(catalogue: Catalogue): Persona[] {
-  return ARCHETYPES.map((arch) => ({
+function fallbackBriefing(catalogue: Catalogue): Briefing {
+  const personas = ARCHETYPES.map((arch) => ({
     name: titleCase(arch.key),
     prompt: genericPrompt(arch.key, catalogue),
     color: arch.color,
     tag: arch.tag,
   }));
+  // Two agents per archetype, each pointed at a different product so they do
+  // not retrace each other even without a model.
+  const briefs = ARCHETYPES.flatMap((arch, i) =>
+    Array.from({ length: PER_ARCHETYPE }, (_, n) =>
+      genericPrompt(arch.key, catalogue, i * PER_ARCHETYPE + n),
+    ),
+  );
+  return { personas, briefs };
 }
 
-function genericPrompt(archetype: string, catalogue: Catalogue): string {
-  const sample = catalogue.products[0];
+function genericPrompt(
+  archetype: string,
+  catalogue: Catalogue,
+  seat = 0,
+): string {
+  const sample = catalogue.products[seat % Math.max(1, catalogue.products.length)];
   const what = sample?.title ?? "something from this store";
   const price = sample?.price ? `$${sample.price}` : "my budget";
   switch (archetype) {

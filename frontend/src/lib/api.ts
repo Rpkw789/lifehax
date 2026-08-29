@@ -10,7 +10,7 @@ export const API_BASE =
 /** Server-sent messages, mirroring `backend/src/store.ts` StreamMessage. */
 export type StreamMessage =
   | { type: "catalogue"; products: number; source: string }
-  | { type: "personas"; personas: Persona[] }
+  | { type: "personas"; personas: Persona[]; briefs: string[] }
   | { type: "session"; agentId: string; liveViewUrl: string }
   | { type: "sessions_closed" }
   | { type: "checks"; checks: unknown }

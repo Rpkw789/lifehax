@@ -63,6 +63,7 @@ export async function runPopulation(
   catalogue: Catalogue,
   checks: Checks,
   personas: Persona[],
+  briefs: string[],
 ): Promise<void> {
   const realIndices = pickRealAgents();
   agentLog.info("population starting", {
@@ -86,7 +87,16 @@ export async function runPopulation(
     .map((i) => runScriptedAgent(run, i, checks, blockers));
 
   const real = realIndices.map((i, slot) =>
-    runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!, open, slot),
+    runRealAgent(
+      run,
+      i,
+      catalogue,
+      personas[personaIndexOf(i)]!,
+      // Each agent shops its own brief, not its archetype's first one.
+      briefs[i] ?? personas[personaIndexOf(i)]!.prompt,
+      open,
+      slot,
+    ),
   );
 
   const startedAt = Date.now();
@@ -157,6 +167,7 @@ async function runRealAgent(
   agentIndex: number,
   catalogue: Catalogue,
   persona: Persona,
+  brief: string,
   open: OpenBrowser[],
   slot: number,
 ): Promise<void> {
@@ -188,7 +199,7 @@ async function runRealAgent(
       ms: since(launchedAt),
       // Index only — a key must never reach a log line.
       key: `${keyIndex + 1}/${API_KEYS.length}`,
-      brief: persona.prompt.slice(0, 60),
+      brief: brief.slice(0, 60),
       entry: short(catalogue.entryUrl),
       session: browser.sessionId
         ? `https://browserbase.com/sessions/${browser.sessionId}`
@@ -273,7 +284,7 @@ async function runRealAgent(
       const listing = await sh.observe(
         "List the product links on this page, with the product name for each.",
       );
-      const chosen = pickCandidate(listing.data ?? [], persona.prompt);
+      const chosen = pickCandidate(listing.data ?? [], brief);
       if (chosen) {
         agentLog.debug(`${agentId} chose a product`, {
           of: (listing.data ?? []).length,
@@ -294,7 +305,7 @@ async function runRealAgent(
       // ourselves: read the hrefs and pick the closest match to the brief.
       if (!/\/products?\//i.test(url)) {
         const links = await productLinks(page);
-        const target = bestMatch(links, persona.prompt);
+        const target = bestMatch(links, brief);
         if (target) {
           agentLog.debug(`${agentId} could not click through, following a link`, {
             of: links.length,
@@ -335,7 +346,7 @@ async function runRealAgent(
       !(await stage(run, agentId, 4, () =>
         observeAndAct(
           sh,
-          `Choose the size, colour or variant that matches this shopper: ${persona.prompt}`,
+          `Choose the size, colour or variant that matches this shopper: ${brief}`,
         ),
       ))
     ) {

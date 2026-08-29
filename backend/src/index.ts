@@ -135,7 +135,7 @@ app.get("/runs/:id/events", (c) => {
       });
     }
     if (run.personas.length > 0) {
-      await send({ type: "personas", personas: run.personas });
+      await send({ type: "personas", personas: run.personas, briefs: run.briefs });
     }
     // Only replay live views that are still alive; a late subscriber must not
     // be handed a URL whose session has already stopped.
@@ -214,15 +214,19 @@ async function orchestrate(run: Run): Promise<void> {
   }
 
   stepAt = Date.now();
-  const personas = await generatePersonas(catalogue);
+  const { personas, briefs } = await generatePersonas(catalogue);
   run.personas = personas;
-  runLog.info("personas", {
+  run.briefs = briefs;
+  runLog.info("briefs", {
     ms: since(stepAt),
-    count: personas.length,
+    archetypes: personas.length,
+    briefs: briefs.length,
     generated: llmConfigured(),
   });
-  for (const p of personas) runLog.debug(`  brief ${p.tag}`, p.prompt);
-  publish(run, { type: "personas", personas });
+  for (const [i, brief] of briefs.entries()) {
+    runLog.debug(`  brief ${i + 1}`, brief.slice(0, 90));
+  }
+  publish(run, { type: "personas", personas, briefs });
 
   stepAt = Date.now();
   const checks = await runChecks(catalogue, run.input);
@@ -237,7 +241,7 @@ async function orchestrate(run: Run): Promise<void> {
   });
   publish(run, { type: "checks", checks });
 
-  await runPopulation(run, catalogue, checks, personas);
+  await runPopulation(run, catalogue, checks, personas, briefs);
 
   stepAt = Date.now();
   run.surfaces = computeSurfaces(checks);

@@ -13,7 +13,7 @@ const subscribers = new Map<string, Set<(e: StreamMessage) => void>>();
 /** What goes down the SSE wire. `agent` carries an `AgentEvent`. */
 export type StreamMessage =
   | { type: "catalogue"; products: number; source: string }
-  | { type: "personas"; personas: Run["personas"] }
+  | { type: "personas"; personas: Run["personas"]; briefs: string[] }
   | { type: "session"; agentId: string; liveViewUrl: string }
   /** Every browser has closed; live views are dead and must not be shown. */
   | { type: "sessions_closed" }
@@ -32,6 +32,7 @@ export function createRun(input: RunInput): Run {
     input,
     catalogue: null,
     personas: [],
+    briefs: [],
     checks: null,
     surfaces: [],
     findings: [],

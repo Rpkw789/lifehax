@@ -71,13 +71,15 @@ export const AGENT_COUNT = 10;
 export const TILE_CLIPS: readonly string[] = [
   "sephora",
   "shein",
+  "shopee",
   "footlocker",
+  "medicube",
   "sweelee",
   "footlocker2",
 ];
 
-/** How many sessions get a tile. */
-export const TILE_COUNT = 6;
+/** How many sessions get a tile. One per clip, so none repeats. */
+export const TILE_COUNT = TILE_CLIPS.length;
 
 /** Which four sessions get a livestream tile. */
 export const TILE_IDS: readonly string[] = ["A02", "A03", "A08", "A09"];

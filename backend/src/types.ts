@@ -159,6 +159,11 @@ export interface Run {
   input: RunInput;
   catalogue: Catalogue | null;
   personas: Persona[];
+  /**
+   * One brief per agent. Two agents share an archetype but never a brief —
+   * running the same shopper twice makes half the population redundant.
+   */
+  briefs: string[];
   checks: Checks | null;
   surfaces: Surface[];
   findings: Finding[];

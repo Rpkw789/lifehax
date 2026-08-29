@@ -29,6 +29,7 @@ export default function CheckScreen() {
     personas,
     sessions,
     tileIds,
+    briefs,
   } = useRun();
   const started = useRef(false);
 
@@ -159,6 +160,7 @@ export default function CheckScreen() {
               storeHost={storeHost}
               liveViewUrl={sessions[agent.id]}
               booting={running && agent.progress === 0 && !agent.blocked}
+              brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
               events={events.filter((e) => e.agentId === agent.id)}
             />
           ))}

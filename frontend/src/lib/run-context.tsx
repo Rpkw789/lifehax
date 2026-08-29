@@ -64,6 +64,8 @@ interface RunContextValue {
   personas: Persona[];
   findings: Finding[];
   surfaces: Surface[];
+  /** One brief per agent — two agents share an archetype, never a brief. */
+  briefs: string[];
   catalogueCount: number;
   /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
   sessions: Record<string, string>;
@@ -95,6 +97,7 @@ export function RunProvider({
   const [input, setInput] = useState<RunInput>(DEFAULT_INPUT);
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [briefs, setBriefs] = useState<string[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [surfaces, setSurfaces] = useState<Surface[]>([]);
   const [catalogueCount, setCatalogueCount] = useState(0);
@@ -116,6 +119,7 @@ export function RunProvider({
         break;
       case "personas":
         setPersonas(message.personas);
+        setBriefs(message.briefs ?? []);
         break;
       case "session":
         setSessions((current) => ({
@@ -151,6 +155,7 @@ export function RunProvider({
 
     setEvents([]);
     setSessions({});
+    setBriefs([]);
     setFindings([]);
     setSurfaces([]);
     setError(null);
@@ -249,6 +254,7 @@ export function RunProvider({
       personas: shownPersonas,
       findings,
       surfaces,
+      briefs,
       catalogueCount,
       sessions,
       tileIds,
@@ -271,6 +277,7 @@ export function RunProvider({
       agents,
       findings,
       surfaces,
+      briefs,
       catalogueCount,
       sessions,
       tileIds,
