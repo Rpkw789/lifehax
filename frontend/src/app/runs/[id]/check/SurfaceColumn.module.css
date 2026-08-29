@@ -131,11 +131,23 @@
 }
 
 /* The browser column stacks its tiles rather than rendering a feed. */
+/*
+ * Tiles inside the browser column. Two across so more than one video is
+ * visible at a time — stacked in a narrow column you saw about one and a half
+ * of seven, which defeats the point of having seven.
+ */
 .tiles {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 8px;
   padding: 8px;
-  max-height: 620px;
+  max-height: 840px;
   overflow-y: auto;
+}
+
+@media (max-width: 1500px) {
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    max-height: 700px;
+  }
 }

@@ -281,13 +281,26 @@
  */
 .columns {
   display: grid;
-  grid-template-columns: 1.35fr 1fr 1fr 1fr;
+  /* The browser column carries live video and is the thing people look at, so
+     it gets roughly double a text column and lays its tiles out two-up. */
+  grid-template-columns: 2.1fr 1fr 1fr 1fr;
   gap: 12px;
   align-items: start;
 }
 
 /* Browser agents need more room than a text feed; below this they stack. */
-@media (max-width: 1280px) {
+/* Below this the four columns cannot all hold video and text, so the browser
+   column takes a full row of its own and the three feeds share the next. */
+@media (max-width: 1500px) {
+  .columns {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .columns > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
   .columns {
     grid-template-columns: repeat(2, 1fr);
   }

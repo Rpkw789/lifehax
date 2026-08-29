@@ -104,7 +104,7 @@
   position: relative;
   /* Tall enough that a live browser view is actually legible; the ring regions
      are percentages, so they scale with it. */
-  height: 230px;
+  height: 190px;
   background: var(--page);
   overflow: hidden;
 }
@@ -272,14 +272,14 @@
  * without this the tiles look identical even when the shoppers are not.
  */
 .brief {
-  padding: 6px 10px 7px;
+  padding: 5px 9px 6px;
   border-bottom: 1px solid var(--hairline);
   font-size: 11px;
   line-height: 1.35;
   color: var(--secondary);
   background: var(--soft);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
