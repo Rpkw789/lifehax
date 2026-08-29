@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { ShopperAgent } from "../agents/types.ts";
 import type { SurfaceWorkerContext, SurfaceWorkerResult } from "./types.ts";
 import { runSurfaceSimulations, type SurfaceSimulationInput } from "./orchestrate.ts";
 
@@ -133,6 +134,62 @@ test("bounds a hung worker and still returns a degraded report", async () => {
 
   expect(report.site_audit.agent_commerce.note).toBe("Unable to verify");
   expect(report.evidence.some((item) => item.summary.includes("timed out"))).toBe(true);
+});
+
+test("does not let critique time consume the completed web-search result", async () => {
+  const messages: string[] = [];
+  const agent: ShopperAgent = {
+    kind: "shared-search",
+    model: "openai/test-model",
+    async *run(persona, context) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const base = {
+        run_id: context.runId,
+        query_id: persona.query_id,
+        agent_id: "agent_surface_001",
+        agent_kind: "shared-search" as const,
+      };
+      const productUrl = "https://example.com/items/primary";
+      yield { ...base, type: "agent.api", endpoint: "responses", latency_ms: 20 };
+      yield { ...base, type: "agent.citation", title: "Primary item", url: productUrl, position: 1 };
+      yield {
+        ...base,
+        type: "agent.verdict",
+        proposal: {
+          candidates: [{ name: "Primary item", url: productUrl, reason_codes: [] }],
+          purchase_intent: "high",
+          confidence: 0.9,
+        },
+      };
+    },
+  };
+
+  const report = await runSurfaceSimulations(inputFixture(), {
+    workerTimeoutMs: 25,
+    critiqueTimeoutMs: 10,
+    agent,
+    critiqueClient: async () => new Promise<never>(() => undefined),
+    emitForWorker: (surface, phase, message, evidenceId) => {
+      messages.push(message);
+      return {
+        event_id: `surf_${messages.length}`,
+        sequence: messages.length - 1,
+        surface,
+        phase,
+        at: "2026-08-29T10:25:03.114Z",
+        message,
+        evidence_id: evidenceId,
+      };
+    },
+    protocolWorker: async () => ({ surface: "agent_protocol", evidence: [], probes: {}, critique: null }),
+    guideWorker: async () => ({ surface: "model_readable_guide", evidence: [], probes: {}, critique: null }),
+  });
+
+  expect(report.agent_runs[0]?.agent.model).toBe("openai/test-model");
+  expect(report.agent_runs[0]?.outcome.target_recommended).toBe(true);
+  expect(report.agent_runs[0]?.outcome.target_rank).toBe(1);
+  expect(messages).toContain("Critique timed out; preserving completed search results");
+  expect(messages).not.toContain("Web search timed out without a recommendation");
 });
 
 test("drops progress emitted by a timed-out worker after it settles", async () => {
