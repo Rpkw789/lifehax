@@ -22,6 +22,7 @@ Keys upgrade two things:
 | Variable | Unlocks | Without it |
 | --- | --- | --- |
 | `BROWSERBASE_API_KEY` | the 3 real browser agents | those 3 report "BROWSERBASE_API_KEY is not set" |
+| `OPENAI_API_KEY` | act/observe inference on our own account | Stagehand falls back to Browserbase's Model Gateway, on their plan |
 | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | generated briefs, written findings | archetype briefs, rule-based findings |
 
 The Cloudflare token must be an **AI Gateway token** with the `AI Gateway Run`
@@ -32,6 +33,12 @@ a gateway is literally called that. Account id from `npx wrangler whoami`.
 
 Browserbase's free tier is 3 concurrent browsers and 5 session requests per
 minute per account, which is why `HAPPY2_REAL_AGENTS` defaults to 3.
+
+A real agent's `act` and `observe` calls are a second, separate model spend from
+the Cloudflare gateway above. Left unconfigured they run on Browserbase's Model
+Gateway — the browser plan pays, and Browserbase picks the model. `OPENAI_API_KEY`
+plus `HAPPY2_AGENT_MODEL` (provider-prefixed, e.g. `openai/gpt-5.4-mini`) moves
+that onto our own account.
 
 Verify the gateway independently before blaming the app. This is the same
 endpoint and header `llm.ts` uses — note `cf-aig-authorization`, not
@@ -51,9 +58,10 @@ curl -X POST \
 | Method | Path | |
 | --- | --- | --- |
 | `POST` | `/runs` | `RunInput` → `{ runId }`; starts work async |
+| `GET` | `/runs` | saved runs, newest first — summaries, no documents |
 | `GET` | `/runs/:id` | full snapshot: catalogue, personas, checks, surfaces, findings, events |
 | `GET` | `/runs/:id/events` | SSE: `catalogue`, `personas`, `checks`, `agent`, `findings`, `done` |
-| `GET` | `/health` | liveness, plus which keys are configured |
+| `GET` | `/health` | liveness, which keys are configured, and the storage engine |
 
 Errors are `{ error: { code, message } }` with the status carrying the class.
 
@@ -74,10 +82,14 @@ agents.ts      3 real Stagehand runs + 7 scripted
 findings.ts    surfaces (arithmetic) + findings (model, with rule fallback)
 llm.ts         the only model entry point
 store.ts       in-memory runs + per-run event bus
+persistence/   db.ts (Postgres or bun:sqlite), runs.ts (saved runs)
 http.ts        fetch helpers, JSON-LD extraction
 ```
 
-Run state is in memory and vanishes on restart.
+A live run is in memory and vanishes on restart; a finished one is written to
+the database and comes back. `DATABASE_URL` selects Postgres, and without it
+everything falls back to a `happy2.sqlite` file — no setup, but no durability
+either, since the deployed container's filesystem does not survive a deploy.
 
 ## Two things to know
 

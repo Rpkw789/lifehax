@@ -117,7 +117,7 @@
 .chipBlocked {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* Marks the screen as standing in, matching the "simulated" tag on Check. */

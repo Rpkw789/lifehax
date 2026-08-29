@@ -26,6 +26,10 @@ Both services deploy from `render.yaml` at the repo root.
 
    `CLOUDFLARE_GATEWAY_ID` is set in the blueprint and must match the gateway's
    real name. `default` only works if a gateway is literally called that.
+   Render also creates **happy2-db**, the free Postgres declared at the bottom
+   of `render.yaml`, and wires `DATABASE_URL` into the backend for you — there
+   is nothing to type. If the blueprint was already synced before the database
+   existed, re-sync it from the dashboard to pick it up.
 4. Once **happy2-backend** is live, copy its URL (`https://….onrender.com`) into
    **happy2-frontend**'s `NEXT_PUBLIC_API_BASE` and redeploy the frontend.
 
@@ -51,7 +55,16 @@ below).
   before demoing.
 - Sleeping wipes the backend's in-memory run store (`store.ts` says as much).
   A run in progress holds its SSE connection open, so the service stays awake
-  for the duration of a run — but anything finished is gone after a sleep.
+  for the duration of a run. A *finished* run survives, because it is written to
+  Postgres — but only what was written: the live run's SSE stream is gone, and
+  reopening the run replays it from the saved document.
+- **A free Postgres is deleted 30 days after it is created.** Render emails
+  first and gives a 14-day grace period to upgrade, which keeps the data.
+  Ignoring it loses every saved run. This is the single deadline on this
+  deployment; nothing else here expires.
+- Free web services **cannot** attach a persistent disk, which is why saved runs
+  go to Postgres rather than the `bun:sqlite` file the code falls back to
+  locally. That file exists in the container and is wiped by every deploy.
 - Free services are suspended until the next month if you exhaust the 750 hours.
 
 ### The cost that isn't Render's

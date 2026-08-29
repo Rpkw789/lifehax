@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 
+import { ThemeProvider, themeScript } from "@/lib/theme";
 import "./globals.css";
 
 /** UI type. */
@@ -30,8 +31,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+    // suppressHydrationWarning: `themeScript` sets data-theme before React
+    // sees the document, so the server's markup and the client's legitimately
+    // disagree on this one attribute.
+    <html
+      lang="en"
+      className={`${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

@@ -27,9 +27,10 @@ npm run dev
 
 Then open <http://localhost:3200>.
 
-**It works with no keys at all.** The audit is plain `fetch`, personas fall back
-to category-agnostic archetypes, and findings fall back to deterministic rules.
-Keys upgrade the run rather than enable it.
+**It works with no keys at all, and no database.** The audit is plain `fetch`,
+personas fall back to category-agnostic archetypes, findings fall back to
+deterministic rules, and finished runs are saved to a local `bun:sqlite` file.
+Keys and `DATABASE_URL` upgrade a run rather than enable it.
 
 ## The four screens
 
@@ -46,6 +47,7 @@ Keys upgrade the run rather than enable it.
 | --- | --- | --- |
 | `BROWSERBASE_API_KEYS` | the real browser agents | those agents report the key is missing |
 | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | generated briefs and written findings | archetype briefs, rule-based findings |
+| `DATABASE_URL` | saved runs in Postgres, which is what survives a deploy | a local `happy2.sqlite` file, wiped on every restart |
 
 The Cloudflare token must be an **AI Gateway token** with the `AI Gateway Run`
 permission, created inside the gateway's own Settings. A general Cloudflare API
@@ -63,7 +65,7 @@ Check what a running server picked up:
 
 ```sh
 curl -s localhost:3201/health
-# {"ok":true,"llm":true,"browserbase":true}
+# {"ok":true,"llm":true,"browserbase":true,"db":"sqlite"}
 ```
 
 That reports whether the variables are *set*, not whether they *work*. If
@@ -73,7 +75,7 @@ backend log.
 ## Layout
 
 ```
-backend/    Bun + Hono. The audit, the agents, the findings engine.
+backend/    Bun + Hono. The audit, the agents, the findings engine, saved runs.
 frontend/   Next.js. The four screens.
 shared/     Contracts and fixtures both sides import.
 docs/       Architecture, contracts, workstreams, specs.
@@ -85,6 +87,16 @@ survive without JavaScript. **That is where the evidence comes from.** The
 browser agents are the visual; the probes are the measurement. It is what keeps
 a run fast, free and honest when Browserbase is unavailable.
 
+## Saved runs
+
+A run lives in memory while it streams and is written to the database once it
+stops. `GET /runs` lists them newest first; `GET /runs/:id` reads memory first
+and falls back to the database, so a finished run survives a restart. Deployed,
+that database is a **free** Render Postgres — which Render deletes 30 days after
+creation unless it is upgraded. See [`docs/deploy.md`](docs/deploy.md).
+
+There is no history *screen* yet. The endpoint is reachable by `curl` only.
+
 ## Verify
 
 ```sh
@@ -92,7 +104,10 @@ cd backend  && bun test && bun run typecheck
 cd frontend && bun test && npm run typecheck
 ```
 
-No network access is required by either suite.
+No network access is required by either suite, and no database: the stores fall
+back to in-memory SQLite. To exercise the Postgres path instead, point
+`TEST_DATABASE_URL` at one — `bun test src/persistence/` runs the same suite
+against whichever engine it finds.
 
 ## Where to read next
 

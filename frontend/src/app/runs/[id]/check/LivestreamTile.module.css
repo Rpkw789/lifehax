@@ -66,7 +66,7 @@
 .chipBlocked {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* Fake URL bar */
@@ -289,4 +289,42 @@
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* A settled agent shows its outcome, not a feed. Same ground and grid as the
+   boot state so the tile does not appear to change medium when it stops. */
+.settled {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  background: var(--ground);
+  overflow: hidden;
+  text-align: center;
+}
+
+.settledOutcome {
+  position: relative;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--secondary);
+}
+
+.settledReason {
+  position: relative;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--tertiary);
+  max-width: 34ch;
+}
+
+.settledPath {
+  position: relative;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  color: var(--faint);
 }

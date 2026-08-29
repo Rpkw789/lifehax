@@ -6,6 +6,14 @@ import { Button } from "@/components/Button";
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { STAGES } from "@/lib/fixtures";
+import {
+  buildFindingsMarkdown,
+  buildRunJson,
+  downloadFile,
+  exportBasename,
+  type RunExport,
+} from "@/lib/export";
+import { overallScore, verdictFor } from "@/lib/readiness";
 import { useRun } from "@/lib/run-context";
 import type { Severity } from "@/lib/types";
 import styles from "./recommend.module.css";
@@ -44,7 +52,44 @@ export default function RecommendScreen() {
     personas,
     findings,
     surfaces,
+    input,
+    catalogueCount,
   } = useRun();
+
+  const score = overallScore(surfaces);
+  const verdict = verdictFor(score);
+  const settled = agents.filter((a) => a.settled);
+  const completed = agents.filter((a) => a.ok).length;
+  const blocked = settled.filter((a) => a.blocked);
+
+  function snapshot(): RunExport {
+    return {
+      runId,
+      storeUrl: input.storeUrl,
+      exportedAt: new Date().toISOString(),
+      catalogueCount,
+      readiness: { score, verdict },
+      agents: agents.map((a) => ({
+        id: a.id,
+        persona: a.persona.name,
+        stagesCleared: a.progress,
+        outcome: a.ok ? "completed" : a.blocked ? "blocked" : "running",
+        ...(a.reason ? { reason: a.reason } : {}),
+      })),
+      surfaces: [...surfaces],
+      findings: [...findings],
+    };
+  }
+
+  function exportAs(kind: "json" | "md"): void {
+    const run = snapshot();
+    const base = exportBasename(run.storeUrl, run.exportedAt);
+    if (kind === "json") {
+      downloadFile(`${base}.json`, "application/json", buildRunJson(run));
+    } else {
+      downloadFile(`${base}.md`, "text/markdown", buildFindingsMarkdown(run));
+    }
+  }
 
   return (
     <div className={styles.screen}>
@@ -53,21 +98,26 @@ export default function RecommendScreen() {
           <div className={styles.scoreSide}>
             <SectionLabel>AI readiness</SectionLabel>
             <div className={styles.scoreValue}>
-              <span className={styles.score}>42</span>
+              <span className={styles.score}>{score}</span>
               <span className={styles.scoreMax}>/100</span>
             </div>
-            <div className={styles.verdict}>Partially reachable</div>
+            <div className={styles.verdict}>{verdict}</div>
           </div>
 
           <div className={styles.summarySide}>
             <p className={styles.summary}>
-              Three of ten agents completed a purchase. Every failure sat in one
-              of two places: product facts an agent could not read without
-              vision, and a checkout that assumes a human with an account.
-              Neither needs a redesign — both are additive.
+              {settled.length === 0
+                ? "No agent has settled yet."
+                : `${completed} of ${agents.length} agents reached checkout.` +
+                  (blocked.length > 0
+                    ? ` ${blocked.length} were blocked, the first at ${blocked[0]?.reason ?? "an earlier stage"}.`
+                    : "")}
             </p>
             <div className={styles.summaryActions}>
-              <Button>Export findings</Button>
+              <Button onClick={() => exportAs("md")}>Export report</Button>
+              <Button variant="outlineSoft" onClick={() => exportAs("json")}>
+                Export JSON
+              </Button>
               <Button
                 variant="outlineSoft"
                 onClick={() => router.push(`/runs/${runId}/input`)}

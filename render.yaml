@@ -26,6 +26,13 @@ services:
       # agents can really browse. A single key is fine too.
       - key: BROWSERBASE_API_KEYS
         sync: false
+      # The model behind a real agent's act/observe calls. Unset, Stagehand
+      # routes inference through Browserbase's Model Gateway, spending the
+      # browser plan on a model nobody chose.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: HAPPY2_AGENT_MODEL
+        value: openai/gpt-5.4-mini
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
       - key: CLOUDFLARE_API_TOKEN
@@ -43,6 +50,14 @@ services:
       # configured instead of over-subscribing a single account.
       - key: HAPPY2_STAGE_DELAY_MS
         value: "0"
+      # Render fills this in from the database below — the in-region internal
+      # connection string, so no sslmode and no egress cost. Unset (local dev,
+      # a fresh checkout, CI) the backend falls back to bun:sqlite, so nothing
+      # here is required to run the app.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: happy2-db
+          property: connectionString
 
   - type: web
     name: happy2-frontend
@@ -61,3 +76,17 @@ services:
       # build arg, and Next inlines NEXT_PUBLIC_* into the client bundle.
       - key: NEXT_PUBLIC_API_BASE
         sync: false
+
+# Saved runs. Without this, every run is lost on restart — and free web services
+# spin down after 15 minutes idle, so "restart" means several times a day.
+#
+# CAVEAT, and it is the whole reason this is a deliberate choice: a FREE Render
+# Postgres is DELETED 30 DAYS AFTER CREATION, with a 14-day grace period to
+# upgrade first. Render emails before it happens. Upgrading to a paid instance
+# in the dashboard keeps the data; letting it lapse loses every saved run.
+databases:
+  - name: happy2-db
+    plan: free
+    region: singapore
+    databaseName: happy2
+    user: happy2

@@ -81,9 +81,6 @@ export const TILE_CLIPS: readonly string[] = [
 /** How many sessions get a tile. One per clip, so none repeats. */
 export const TILE_COUNT = TILE_CLIPS.length;
 
-/** Which four sessions get a livestream tile. */
-export const TILE_IDS: readonly string[] = ["A02", "A03", "A08", "A09"];
-
 /**
  * Where the focus ring sits in the tile viewport, per stage. Percentages of the
  * viewport box. Moving the ring between these is the signature motion.

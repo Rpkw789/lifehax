@@ -60,7 +60,9 @@ export function AgentViewport({
         )}
       </div>
 
-      <div className={styles.viewport}>
+      {/* A light island, as on the tiles: this box shows the storefront as the
+          agent saw it, and inverting that would misrepresent it. */}
+      <div className={styles.viewport} data-surface="page-preview">
         {liveViewUrl ? (
           <iframe
             className={styles.feed}

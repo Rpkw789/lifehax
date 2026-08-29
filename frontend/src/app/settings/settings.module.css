@@ -1,0 +1,145 @@
+.header {
+  height: 56px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.title {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 20px 40px;
+  background: var(--ground);
+}
+
+/* Sections stack down the column; a second one (API keys) drops in below the
+   first without touching this. */
+.section {
+  max-width: 620px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--page);
+  padding: 15px 17px 17px;
+}
+
+.sectionLabel {
+  margin-bottom: 13px;
+}
+
+.field {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.fieldText {
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldName {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fieldHint {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--tertiary);
+  line-height: 1.45;
+}
+
+/* The segmented control. A fieldset of real radios, so arrow keys, labels and
+   screen-reader grouping all come for free — the inputs are clipped rather
+   than display:none, which would take them out of the tab order. */
+.control {
+  flex: none;
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.option {
+  position: relative;
+  display: flex;
+}
+
+.option + .option {
+  border-left: 1px solid var(--border-strong);
+}
+
+.radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.optionLabel {
+  padding: 7px 13px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  background: var(--page);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.radio:hover + .optionLabel {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.radio:checked + .optionLabel {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+/* Keyboard focus only — clicking a segment should not leave a ring behind. */
+.radio:focus-visible + .optionLabel {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.resolved {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}

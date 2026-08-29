@@ -1,0 +1,52 @@
+# The commands from README.md's "Verify" section, run on every push and PR.
+#
+# deploy.yml calls this workflow before it deploys, which is why `workflow_call`
+# is here and why `push` ignores main — otherwise a push to main would run these
+# jobs twice, once on its own and once as the deploy's gate.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # bun.lock is the source of truth here; backend/pnpm-lock.yaml is stale.
+      - run: bun install --frozen-lockfile
+        working-directory: backend
+      # No database and no network: the stores fall back to in-memory SQLite.
+      - run: bun test
+        working-directory: backend
+      - run: bun run typecheck
+        working-directory: backend
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # npm for the install (package-lock.json is the real lockfile), bun for
+      # the test runner, which is what the suite is written against.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+        working-directory: frontend
+      - run: bun test
+        working-directory: frontend
+      - run: npm run typecheck
+        working-directory: frontend

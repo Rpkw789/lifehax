@@ -1,6 +1,23 @@
 /* Neutrals from the handoff's token table. No shadows anywhere — depth is
-   borders and ground tints only. */
-:root {
+   borders and ground tints only.
+
+   The ramp runs from --ink (text) to --page (background) with the near-page
+   tints clustered at the light end. Dark mode re-maps the same names by
+   *role* rather than inverting them: a straight inversion would collapse the
+   five near-white tints (--strip through --page) into indistinguishable
+   near-blacks. Every token name is identical in both themes, which is why no
+   component stylesheet knows a theme exists. */
+/* The second selector is a "light island": a subtree that keeps the light
+   ramp whatever the theme is. The livestream viewport uses it, because it
+   shows a picture of someone else's storefront — a real screenshot, a
+   capture, or the skeleton standing in for one. Inverting that would
+   misrepresent what the agent actually saw. Re-declaring the tokens on the
+   element relights its whole subtree, since custom properties inherit from
+   the nearest declaring ancestor. */
+:root,
+[data-surface="page-preview"] {
+  color-scheme: light;
+
   --ink: #101012;
   --ink-hover: #2c2c31;
   --secondary: #3f3f47;
@@ -23,6 +40,76 @@
   --nav-active: #f0f0f1;
   --nav-hover: #f4f4f5;
   --stepper-active-border: #d7d7db;
+
+  /* Text and marks sitting on an --ink ground: the primary button, the
+     selection highlight, the filled chevron. Inverts with the theme, which is
+     the whole reason it is a token and not a literal #fff. */
+  --on-ink: #ffffff;
+}
+
+/* The dark ramp is written twice because CSS cannot share a declaration block
+   across a media-query boundary. The two blocks must stay identical: the
+   first serves "System", the second an explicitly pinned "Dark". `system` is
+   expressed as the *absence* of data-theme, so :not([data-theme="light"]) is
+   what lets a pinned light choice beat a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ink: #f3f3f5;
+    --ink-hover: #dcdce1;
+    --secondary: #c4c4cc;
+    --tertiary: #9d9da7;
+    --blocked: #85858f;
+    --muted: #74747e;
+    --faint: #61616b;
+    --was: #52525b;
+    --border-strong: #44444d;
+    --border: #33333b;
+    --chevron-off: #2e2e36;
+    --divider: #292930;
+    --hairline: #23232a;
+    --strip: #1b1b22;
+    --ground: #18181e;
+    --soft: #16161c;
+    --stepper-row: #131319;
+    --page: #111116;
+
+    --nav-active: #2a2a33;
+    --nav-hover: #212129;
+    --stepper-active-border: #4a4a54;
+
+    --on-ink: #111116;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink: #f3f3f5;
+  --ink-hover: #dcdce1;
+  --secondary: #c4c4cc;
+  --tertiary: #9d9da7;
+  --blocked: #85858f;
+  --muted: #74747e;
+  --faint: #61616b;
+  --was: #52525b;
+  --border-strong: #44444d;
+  --border: #33333b;
+  --chevron-off: #2e2e36;
+  --divider: #292930;
+  --hairline: #23232a;
+  --strip: #1b1b22;
+  --ground: #18181e;
+  --soft: #16161c;
+  --stepper-row: #131319;
+  --page: #111116;
+
+  --nav-active: #2a2a33;
+  --nav-hover: #212129;
+  --stepper-active-border: #4a4a54;
+
+  --on-ink: #111116;
 }
 
 * {
@@ -62,7 +149,7 @@ input {
 
 ::selection {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 ::-webkit-scrollbar {

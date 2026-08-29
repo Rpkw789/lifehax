@@ -27,7 +27,6 @@ function titleFor(step: StepKey, storeHost: string): string {
 const SECTIONS: Record<string, { title: string; meta: string }> = {
   personas: { title: "Agent personas", meta: "the population this run shops with" },
   history: { title: "Past runs", meta: "every audit on this workspace" },
-  settings: { title: "Settings", meta: "run configuration · capabilities" },
 };
 
 /**

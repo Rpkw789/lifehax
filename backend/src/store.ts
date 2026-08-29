@@ -1,8 +1,9 @@
 /**
  * In-memory run store plus a per-run event bus.
  *
- * Runs vanish on restart. That is deliberate for now — see the plan; the
- * documented architecture calls for bun:sqlite, which we skip today.
+ * This is the live copy only: a run lives here while it streams, and vanishes
+ * on restart. `persistence/runs.ts` is what makes it durable — index.ts writes
+ * the finished run there and reads it back when it is no longer in this map.
  */
 
 import type { AgentEvent, Run, RunInput } from "./types";

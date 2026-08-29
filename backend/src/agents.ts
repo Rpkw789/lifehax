@@ -12,7 +12,7 @@
  * REAL_AGENT_COUNT is 3 by design, not by accident.
  */
 
-import { browserbase, Stagehand } from "@browserbasehq/stagehand";
+import { browserbase, Stagehand, type ModelName } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
 import { logger, since } from "./log";
@@ -36,6 +36,27 @@ const API_KEYS = (process.env.BROWSERBASE_API_KEYS ?? process.env.BROWSERBASE_AP
 
 const CONCURRENT_PER_KEY = 3;
 
+/**
+ * The model behind `act` and `observe`, and the key it bills to.
+ *
+ * Left unset, Stagehand routes inference through Browserbase's Model Gateway:
+ * Browserbase picks the model and spends the browser account's plan, so a run
+ * can stall on inference quota with browser-hours to spare. Naming a model and
+ * a key here moves that spend onto our own account and makes the choice
+ * visible. Provider-prefixed, e.g. `openai/gpt-5.4-mini`.
+ *
+ * This is deliberately *not* the Cloudflare gateway path in `llm.ts` — that one
+ * speaks the Anthropic Messages schema over `fetch`, while Stagehand needs a
+ * provider it can drive itself. Personas and findings still go through `llm.ts`.
+ */
+const AGENT_MODEL =
+  // ModelName is a union of literals and an env var is a string, so an
+  // unrecognised id is caught by the first call, not by the compiler.
+  (process.env.HAPPY2_AGENT_MODEL ?? "openai/gpt-5.4-mini") as ModelName;
+
+/** Empty means we have no key of our own, and inference falls back to them. */
+const AGENT_MODEL_KEY = (process.env.OPENAI_API_KEY ?? "").trim();
+
 const REAL_AGENT_COUNT = Number(
   process.env.HAPPY2_REAL_AGENTS ?? API_KEYS.length * CONCURRENT_PER_KEY,
 );
@@ -47,6 +68,25 @@ const STEP_TICKS = 7;
 const MS_PER_TICK = 140;
 
 const agentLog = logger("agents");
+
+/**
+ * What the real agents are configured with, for /health and the startup line.
+ *
+ * `browserbase` reads the pool, not `BROWSERBASE_API_KEY` alone — the deploy
+ * docs tell you to set the plural, and health reporting it as missing while
+ * agents happily browse sends you debugging the wrong thing.
+ */
+export function agentConfig(): {
+  browserbase: boolean;
+  keys: number;
+  model: string;
+} {
+  return {
+    browserbase: API_KEYS.length > 0,
+    keys: API_KEYS.length,
+    model: AGENT_MODEL_KEY ? AGENT_MODEL : "browserbase model gateway",
+  };
+}
 
 export const AGENT_IDS = Array.from(
   { length: 10 },
@@ -186,7 +226,14 @@ async function runRealAgent(
   try {
     const launchedAt = Date.now();
     const browser = await browserbase.launch({ apiKey });
-    const stagehand = await Stagehand.create({ browser });
+    const stagehand = await Stagehand.create({
+      browser,
+      // Omitting `model` hands inference to Browserbase's Model Gateway on
+      // their plan. With a key of our own, spend and model choice are ours.
+      ...(AGENT_MODEL_KEY
+        ? { model: { modelName: AGENT_MODEL, apiKey: AGENT_MODEL_KEY } }
+        : {}),
+    });
     open.push({ stagehand, browser });
 
     if (browser.sessionId) {
@@ -199,6 +246,8 @@ async function runRealAgent(
       ms: since(launchedAt),
       // Index only — a key must never reach a log line.
       key: `${keyIndex + 1}/${API_KEYS.length}`,
+      // Model id only — never the key that pays for it.
+      model: AGENT_MODEL_KEY ? AGENT_MODEL : "browserbase model gateway",
       brief: brief.slice(0, 60),
       entry: short(catalogue.entryUrl),
       session: browser.sessionId

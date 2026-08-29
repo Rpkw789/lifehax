@@ -1,16 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../../fixtures";
+import { openDb } from "../../persistence/db";
 import { openFindingsStore } from "../store/findings";
 import type { FindingsStore } from "../store/findings";
 import { createEvaluateRoutes } from "./evaluate";
 
-function app() {
-  return createEvaluateRoutes(openFindingsStore(":memory:"));
+function memoryStore() {
+  return openFindingsStore(openDb(undefined, ":memory:"));
+}
+
+async function app() {
+  return createEvaluateRoutes(await memoryStore());
 }
 
 describe("POST /runs/:id/evaluate", () => {
   test("returns ranked findings for a valid CheckResult", async () => {
-    const res = await app().request("/runs/run_1/evaluate", {
+    const res = await (await app()).request("/runs/run_1/evaluate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(loadExampleCheckResult()),
@@ -23,7 +28,7 @@ describe("POST /runs/:id/evaluate", () => {
   });
 
   test("rejects a body that is not a valid CheckResult", async () => {
-    const res = await app().request("/runs/run_1/evaluate", {
+    const res = await (await app()).request("/runs/run_1/evaluate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ report_type: "wrong" }),
@@ -33,7 +38,7 @@ describe("POST /runs/:id/evaluate", () => {
   });
 
   test("rejects a body that is not JSON", async () => {
-    const res = await app().request("/runs/run_1/evaluate", {
+    const res = await (await app()).request("/runs/run_1/evaluate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "not json",
@@ -43,22 +48,22 @@ describe("POST /runs/:id/evaluate", () => {
   });
 
   test("persists the result so it can be reloaded", async () => {
-    const store = openFindingsStore(":memory:");
+    const store = await memoryStore();
     const routes = createEvaluateRoutes(store);
     await routes.request("/runs/run_7/evaluate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(loadExampleCheckResult()),
     });
-    expect(store.load("run_7")!.length).toBe(6);
+    expect((await store.load("run_7"))!.length).toBe(6);
   });
 
   test("returns the standard error shape when persistence fails", async () => {
     const brokenStore: FindingsStore = {
-      save() {
+      async save() {
         throw new Error("disk unavailable");
       },
-      load() {
+      async load() {
         return null;
       },
     };
