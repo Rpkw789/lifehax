@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 
-import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
 import { Attrition } from "./Attrition";
+import { SurfaceRadar } from "./SurfaceRadar";
 import styles from "./dashboard.module.css";
 import { History } from "./History";
 
@@ -65,25 +65,7 @@ export default function DashboardScreen() {
         {surfaces.length > 0 ? (
           <section>
             <SectionLabel>Surface scores</SectionLabel>
-            <div className={styles.surfaces}>
-              {surfaces.map((surface) => (
-                <div key={surface.name}>
-                  <div className={styles.surfaceTop}>
-                    <span className={styles.surfaceName}>{surface.name}</span>
-                    <span className={styles.surfaceScore}>{surface.score}</span>
-                  </div>
-                  <ChevronTrack
-                    className={styles.surfaceTrack}
-                    count={18}
-                    fraction={surface.fraction}
-                    fill="var(--ink)"
-                  />
-                  {surface.note ? (
-                    <p className={styles.surfaceNote}>{surface.note}</p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+            <SurfaceRadar surfaces={surfaces} />
           </section>
         ) : null}
 
