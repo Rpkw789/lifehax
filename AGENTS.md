@@ -86,11 +86,24 @@ plaintext, a log line, an `AgentEvent`, or an error message.
 
 ## Model usage
 
-- Anthropic SDK (`@anthropic-ai/sdk`), model id `claude-opus-5`.
-- `thinking: { type: "adaptive" }` for generation and diagnosis calls.
-- Structured outputs via `output_config.format` — do not parse prose into JSON.
-- Stream any call with a large `max_tokens`.
-- `web_search` is the hosted server tool, used only by `NativeSearchAgent`.
+Model calls go through the **Cloudflare AI Gateway REST API**, not a provider
+SDK. One entry point: `backend/src/llm.ts`.
+
+- `POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1/messages`,
+  which speaks the Anthropic Messages schema verbatim. Plain `fetch`, no SDK.
+- Auth is a Cloudflare API token with **Account > Workers AI > Read**, sent as
+  `Authorization: Bearer`. There is no Anthropic key; third-party models are
+  billed through Cloudflare Unified Billing, so the account needs credits.
+- Model ids are provider-prefixed, e.g. `anthropic/claude-sonnet-4-5`. Override
+  with `HAPPY2_MODEL`.
+- Do **not** use `gateway.ai.cloudflare.com/.../anthropic` (the per-provider
+  passthrough) or `/compat/chat/completions` (deprecated for single-model
+  calls). Both are what search results show; neither is current.
+- Structured outputs are not relied on surviving the gateway. Ask for JSON in
+  the system prompt and parse defensively — `completeJson()` does this, with one
+  retry that shows the model its own broken output.
+- A failed model call must never kill a run. Persona generation and diagnosis
+  both fall back to deterministic paths; the HTTP audit is the real payload.
 
 ## Testing
 

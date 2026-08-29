@@ -1,9 +1,8 @@
-import {
-  RING_REGIONS,
-  STAGES,
-  STAGE_ACTIONS,
-  STAGE_URLS,
-} from "@/lib/fixtures";
+"use client";
+
+import { useState } from "react";
+
+import { RING_REGIONS, STAGES, STAGE_ACTIONS, STAGE_PATHS } from "@/lib/fixtures";
 import { logText } from "@/lib/simulation";
 import type { AgentEvent, AgentState } from "@/lib/types";
 import motion from "@/styles/motion.module.css";
@@ -11,30 +10,37 @@ import styles from "./LivestreamTile.module.css";
 import { PageSkeleton } from "./PageSkeleton";
 
 /**
- * One live session. Everything on it — the URL, the ring's region, the caption,
- * the last two log lines — is derived from the agent's state at the current
- * tick. Nothing is stored per tile.
+ * One live session. The URL, the ring's region, the caption and the log lines
+ * are all derived from the agent's folded state — nothing is stored per tile.
+ *
+ * The viewport plays a capture when one is available at
+ * `public/tiles/<agentId>.mp4`, and falls back to the stylized skeleton when it
+ * is not, so a missing file degrades quietly instead of showing a black box.
  */
 export function LivestreamTile({
   agent,
   events,
+  storeHost,
 }: {
   agent: AgentState;
   /** Every event so far for this agent, oldest first. */
   events: AgentEvent[];
+  storeHost: string;
 }) {
+  const [hasVideo, setHasVideo] = useState(true);
+
   const color = agent.persona.color;
   const stageIndex = Math.max(0, Math.min(5, agent.progress));
-  const region = RING_REGIONS[stageIndex];
+  const region = RING_REGIONS[stageIndex]!;
 
-  const url = agent.blocked
-    ? STAGE_URLS[Math.max(0, agent.fail - 1)]
-    : STAGE_URLS[stageIndex];
+  const path = agent.blocked
+    ? STAGE_PATHS[Math.max(0, agent.fail - 1)]
+    : STAGE_PATHS[stageIndex];
 
   const caption = agent.blocked
     ? `halted — ${agent.reason}`
     : agent.ok
-      ? "purchase confirmed · order NW-4471"
+      ? "checkout reached · no payment details entered"
       : STAGE_ACTIONS[stageIndex];
 
   const logs = events.slice(-2);
@@ -64,11 +70,26 @@ export function LivestreamTile({
           <span className={styles.dot} />
           <span className={styles.dot} />
         </span>
-        <span className={styles.url}>{url}</span>
+        <span className={styles.url}>
+          {storeHost}
+          {path}
+        </span>
       </div>
 
       <div className={styles.viewport}>
-        <PageSkeleton />
+        {hasVideo ? (
+          <video
+            className={styles.feed}
+            src={`/tiles/${agent.id}.mp4`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            onError={() => setHasVideo(false)}
+          />
+        ) : (
+          <PageSkeleton />
+        )}
 
         <div
           className={`${styles.ring} ${motion.ringPulse}`}

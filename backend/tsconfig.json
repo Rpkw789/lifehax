@@ -1,8 +1,20 @@
 {
   "compilerOptions": {
-    "strict": true,
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "lib": ["ESNext"],
     "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
-  }
+  },
+  "include": ["src"]
 }
