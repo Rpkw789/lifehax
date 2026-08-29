@@ -1,0 +1,63 @@
+/*
+ * The motion inventory, in one place.
+ *
+ * Keyframes live here rather than in globals.css because CSS Modules scopes
+ * animation names: a module referencing a globally-declared keyframe gets a
+ * renamed reference that matches nothing, and the animation silently does not
+ * run. Keeping each keyframe and the class that uses it in the same module
+ * keeps the rename consistent. Durations are load-bearing — see the handoff.
+ */
+
+@keyframes h2blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes h2scan {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(1100%);
+  }
+}
+
+@keyframes h2ring {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/** Run-strip live dot, while the run is still going. */
+.dotBlink {
+  animation: h2blink 1s ease-in-out infinite;
+}
+
+/** Stage-board agent swatch, while the agent is still moving. */
+.swatchBlink {
+  animation: h2blink 1.2s ease-in-out infinite;
+}
+
+/** The cursor pinned to the focus ring. Steps, so it snaps rather than fades. */
+.cursorBlink {
+  animation: h2blink 1.1s steps(1, end) infinite;
+}
+
+/** The focus ring's pulse. */
+.ringPulse {
+  animation: h2ring 1.4s ease-in-out infinite;
+}
+
+/** The scan sweep falling down a live viewport. */
+.scanSweep {
+  animation: h2scan 2.6s linear infinite;
+}

@@ -1,0 +1,335 @@
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Scrolls on both axes, so nothing is unreachable at narrow widths. */
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px 18px 28px;
+}
+
+/* Run strip */
+.runStrip {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px 15px;
+  background: var(--soft);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.runState {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--secondary);
+}
+
+.liveDotSettled {
+  background: var(--ink);
+}
+
+.runStateWord {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+/* Completion banner */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid var(--ink);
+  border-radius: 9px;
+  padding: 13px 15px;
+  margin-top: 12px;
+  background: var(--page);
+}
+
+.bannerText {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.bannerPrimary {
+  margin-left: auto;
+}
+
+/* Journey stages */
+.stagesLabel {
+  margin: 22px 0 10px;
+}
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.stageCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: var(--page);
+}
+
+.stageCardBlocked {
+  border-color: var(--border-strong);
+}
+
+.stageTop {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stageName {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+.stageCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink);
+}
+
+.stageTrack {
+  margin-top: 9px;
+}
+
+.stageNote {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+/* Livestream */
+.livestreamLabel {
+  margin: 24px 0 10px;
+}
+
+.livestream {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+/* Stage board */
+.boardLabel {
+  margin: 24px 0 10px;
+}
+
+.board {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  /* Holds a floor and scrolls rather than crushing. */
+  min-width: 560px;
+}
+
+.boardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--strip);
+  border-bottom: 1px solid var(--divider);
+}
+
+.boardHeadCell {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.boardAgentCell {
+  width: 132px;
+  flex: none;
+}
+
+.boardStages {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.boardOutcomeCell {
+  width: 186px;
+  flex: none;
+}
+
+.boardRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--page);
+}
+
+.boardRowBlocked {
+  background: var(--soft);
+}
+
+.boardAgent {
+  width: 132px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agentSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.agentId {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.agentTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.boardTrack {
+  flex: 1;
+  min-width: 0;
+}
+
+.outcome {
+  width: 186px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outcomeSettled {
+  color: var(--ink);
+}
+
+/* Console rail */
+.console {
+  width: clamp(232px, 24vw, 322px);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--soft);
+  border-left: 1px solid var(--divider);
+  min-height: 0;
+}
+
+.consoleHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 16px 11px;
+}
+
+.consoleCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.consoleList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.consoleEntry {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 6px;
+}
+
+.consoleTime {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+  flex: none;
+}
+
+.consoleBadge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  flex: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.consoleMessage {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--tertiary);
+}
+
+.consoleMessageFail {
+  color: var(--ink);
+}

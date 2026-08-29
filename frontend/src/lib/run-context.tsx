@@ -25,14 +25,9 @@ import { PERSONAS, TICK_MS } from "./fixtures";
 import { TOTAL_TICKS } from "./simulation";
 import type { RunInput } from "./types";
 
-export type StepKey = "input" | "check" | "recommend" | "create";
+export type StepKey = "input" | "check" | "recommend";
 
-export const STEP_ORDER: readonly StepKey[] = [
-  "input",
-  "check",
-  "recommend",
-  "create",
-];
+export const STEP_ORDER: readonly StepKey[] = ["input", "check", "recommend"];
 
 interface RunContextValue {
   runId: string;
@@ -56,13 +51,6 @@ interface RunContextValue {
   /** Recommend: which finding accordions are open. */
   openFindings: Record<string, boolean>;
   toggleFinding: (key: string) => void;
-
-  /** Create: which channel card is selected. */
-  channelIndex: number;
-  setChannelIndex: (index: number) => void;
-  verifying: boolean;
-  verified: boolean;
-  runVerification: () => void;
 }
 
 const RunContext = createContext<RunContextValue | null>(null);
@@ -89,9 +77,6 @@ export function RunProvider({
   const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({
     i1: true,
   });
-  const [channelIndex, setChannelIndex] = useState(0);
-  const [verifying, setVerifying] = useState(false);
-  const [verified, setVerified] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stop = useCallback(() => {
@@ -148,19 +133,6 @@ export function RunProvider({
     setOpenFindings((current) => ({ ...current, [key]: !current[key] }));
   }, []);
 
-  const runVerification = useCallback(() => {
-    setVerifying((busy) => {
-      if (busy) return busy;
-      // Keep the 1.4s minimum even against a real re-check: the chevron fill
-      // transition needs the time to read as a change.
-      setTimeout(() => {
-        setVerifying(false);
-        setVerified(true);
-      }, 1400);
-      return true;
-    });
-  }, []);
-
   const storeHost = useMemo(
     () =>
       (input.storeUrl || DEFAULT_INPUT.storeUrl)
@@ -184,11 +156,6 @@ export function RunProvider({
       activePersonaCount: PERSONAS.length - input.disabledPersonas.length,
       openFindings,
       toggleFinding,
-      channelIndex,
-      setChannelIndex,
-      verifying,
-      verified,
-      runVerification,
     }),
     [
       runId,
@@ -202,10 +169,6 @@ export function RunProvider({
       storeHost,
       openFindings,
       toggleFinding,
-      channelIndex,
-      verifying,
-      verified,
-      runVerification,
     ],
   );
 
