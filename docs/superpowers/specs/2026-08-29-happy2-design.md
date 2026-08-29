@@ -58,6 +58,12 @@ interface ShopperAgent {
 Both stream the same `AgentEvent` type, so the live feed, persistence, and
 scoring are implementation-agnostic.
 
+Each shopper uses two streamed requests: the first runs hosted web search and
+collects citations; the second turns that retrieved evidence into the
+schema-constrained recommendation list. Anthropic citations and structured
+outputs cannot be requested together, and deterministic matching accepts only
+candidate URLs backed by citations from the first request.
+
 ### D3 — Personas are generated, never hardcoded
 
 One model call turns the catalogue snapshot into ~20 `PersonaBrief`s. Intent
