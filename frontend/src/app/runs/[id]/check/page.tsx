@@ -158,6 +158,7 @@ export default function CheckScreen() {
               agent={agent}
               storeHost={storeHost}
               liveViewUrl={sessions[agent.id]}
+              booting={running && agent.progress === 0 && !agent.blocked}
               events={events.filter((e) => e.agentId === agent.id)}
             />
           ))}

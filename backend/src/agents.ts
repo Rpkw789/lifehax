@@ -78,6 +78,14 @@ export async function runPopulation(
     }),
   );
 
+  // Tell the UI the live views are dead. Without this the tiles keep an iframe
+  // pointed at a stopped session, which renders Browserbase's DevTools
+  // "debugging connection was closed" page rather than falling back.
+  if (open.length > 0) {
+    run.sessionsClosed = true;
+    publish(run, { type: "sessions_closed" });
+  }
+
   agentLog.info("population settled", {
     ms: since(startedAt),
     browsersClosed: open.length,
