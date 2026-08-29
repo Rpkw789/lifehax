@@ -43,6 +43,15 @@ describe("protocol.manifest", () => {
     expect(finding.addresses_failure_codes).toEqual(["ACP_UNSUPPORTED"]);
     expect(finding.derived_from).toEqual(["ar_001"]);
   });
+
+  test("attributes each protocol probe only to the run that reported it", () => {
+    const finding = protocolManifestRule.evaluate(source)!;
+    const byRun = new Map(finding.evidence.map((e) => [e.agent_run_id, e.references]));
+    expect(byRun.get("ar_001")).toContain("site_audit.agent_commerce");
+    expect(byRun.get("ar_001")).not.toContain("site_audit.ucp");
+    expect(byRun.get("ar_004")).toContain("site_audit.ucp");
+    expect(byRun.get("ar_004")).not.toContain("site_audit.agent_commerce");
+  });
 });
 
 describe("protocol.llms_txt", () => {
@@ -55,6 +64,12 @@ describe("protocol.llms_txt", () => {
 
   test("names the brand in its snippet", () => {
     expect(protocolLlmsTxtRule.evaluate(source)!.recommendation.snippet).toContain("Acme");
+  });
+
+  test("every evidence reference resolves", () => {
+    for (const entry of protocolLlmsTxtRule.evaluate(source)!.evidence) {
+      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
+    }
   });
 
   test("returns null when llms.txt was never flagged", () => {

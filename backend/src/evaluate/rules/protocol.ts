@@ -2,11 +2,18 @@
 
 import type { CheckResult } from "@contracts/check-result";
 import type { FailureCode } from "@contracts/codes";
+import type { FindingEvidence } from "@contracts/finding";
 import { runIdsReporting, wasReported } from "../helpers";
 import { llmsTxtSnippet, manifestSnippet } from "../snippets";
 import type { DraftFinding, Rule } from "../types";
 
-const MANIFEST_CODES: FailureCode[] = ["ACP_UNSUPPORTED", "UCP_UNSUPPORTED"];
+/** Each manifest probe, paired with the document path that evidences it. */
+const MANIFEST_PROBES: { code: FailureCode; reference: string }[] = [
+  { code: "ACP_UNSUPPORTED", reference: "site_audit.agent_commerce" },
+  { code: "UCP_UNSUPPORTED", reference: "site_audit.ucp" },
+];
+
+const MANIFEST_CODES: FailureCode[] = MANIFEST_PROBES.map((probe) => probe.code);
 
 export const protocolManifestRule: Rule = {
   id: "protocol.manifest",
@@ -17,14 +24,29 @@ export const protocolManifestRule: Rule = {
 
     const observed = MANIFEST_CODES.filter((code) => wasReported(source, code));
 
+    // Each run is evidenced only by the probes it actually reported — citing a
+    // probe a run never observed would overstate the finding.
+    const evidence: FindingEvidence[] = [];
+    for (const run of source.agent_runs) {
+      const probes = MANIFEST_PROBES.filter((probe) =>
+        (run.outcome?.failure_codes ?? []).some((entry) => entry.code === probe.code),
+      );
+      if (probes.length === 0) continue;
+
+      evidence.push({
+        agent_run_id: run.run_id,
+        fact: "The protocol check failed, so the agent fell back to reading the storefront by pixels",
+        references: [
+          `agent_runs#${run.run_id}.outcome.failure_codes`,
+          ...probes.map((probe) => probe.reference),
+        ],
+      });
+    }
+
     return {
       severity: "critical",
       title: "No agent-commerce manifest exists on either protocol",
-      evidence: runIds.map((runId) => ({
-        agent_run_id: runId,
-        fact: "The protocol check failed, so the agent fell back to reading the storefront by pixels",
-        references: [`agent_runs#${runId}.outcome.failure_codes`, "site_audit.agent_commerce", "site_audit.ucp"],
-      })),
+      evidence,
       derived_from: runIds,
       addresses_failure_codes: observed,
       recommendation: {
