@@ -34,6 +34,7 @@ export function LivestreamTile({
   storeHost,
   liveViewUrl,
   booting,
+  brief,
 }: {
   agent: AgentState;
   /** Every event so far for this agent, oldest first. */
@@ -43,6 +44,8 @@ export function LivestreamTile({
   liveViewUrl?: string;
   /** The run is live and this agent has not reported anything yet. */
   booting: boolean;
+  /** This agent's own shopping brief. */
+  brief?: string;
 }) {
   // One clip per tile, chosen by the agent's seat so no two tiles play the
   // same footage and the choice is stable across re-renders.
@@ -98,6 +101,8 @@ export function LivestreamTile({
                 : STAGES[stageIndex]}
         </span>
       </div>
+
+      {brief && <div className={styles.brief}>“{brief}”</div>}
 
       <div className={styles.urlBar}>
         <span className={styles.dots}>
