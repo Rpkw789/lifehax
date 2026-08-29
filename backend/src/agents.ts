@@ -19,7 +19,26 @@ import { logger, since } from "./log";
 import { emitAgentEvent, publish } from "./store";
 import type { Catalogue, Checks, Persona, Run, StageNumber } from "./types";
 
-const REAL_AGENT_COUNT = Number(process.env.HAPPY2_REAL_AGENTS ?? 3);
+/**
+ * Browserbase keys, pooled.
+ *
+ * Free tier allows three concurrent browsers per account, so several keys means
+ * proportionally more real agents. Each key spends its own account's quota —
+ * a teammate's hour runs out on their account, not yours.
+ *
+ * Set BROWSERBASE_API_KEYS to a comma-separated list, or BROWSERBASE_API_KEY
+ * for a single one. Keys are only ever referenced by index in logs.
+ */
+const API_KEYS = (process.env.BROWSERBASE_API_KEYS ?? process.env.BROWSERBASE_API_KEY ?? "")
+  .split(",")
+  .map((k) => k.trim())
+  .filter(Boolean);
+
+const CONCURRENT_PER_KEY = 3;
+
+const REAL_AGENT_COUNT = Number(
+  process.env.HAPPY2_REAL_AGENTS ?? API_KEYS.length * CONCURRENT_PER_KEY,
+);
 const STAGE_TIMEOUT_MS = 45_000;
 
 /** Fixture pacing, so the scripted agents animate like the prototype. */
@@ -45,10 +64,12 @@ export async function runPopulation(
   checks: Checks,
   personas: Persona[],
 ): Promise<void> {
-  const realIndices = pickRealAgents(personas.length);
+  const realIndices = pickRealAgents();
   agentLog.info("population starting", {
-    real: realIndices.map((i) => AGENT_IDS[i]).join(","),
-    scripted: 10 - realIndices.length,
+    real: realIndices.map((i) => AGENT_IDS[i]).join(",") || "none",
+    scripted: AGENT_IDS.length - realIndices.length,
+    keys: API_KEYS.length,
+    capacity: API_KEYS.length * CONCURRENT_PER_KEY,
   });
 
   // Browsers stay open until every agent has settled, so each tile's live view
@@ -64,8 +85,8 @@ export async function runPopulation(
     .filter((i) => !realIndices.includes(i))
     .map((i) => runScriptedAgent(run, i, checks, blockers));
 
-  const real = realIndices.map((i) =>
-    runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!, open),
+  const real = realIndices.map((i, slot) =>
+    runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!, open, slot),
   );
 
   const startedAt = Date.now();
@@ -93,13 +114,19 @@ export async function runPopulation(
 }
 
 /** Spread the real agents across different briefs so the tiles differ. */
-function pickRealAgents(personaCount: number): number[] {
-  const stride = Math.max(1, Math.floor(10 / Math.max(1, REAL_AGENT_COUNT)));
+function pickRealAgents(): number[] {
+  const wanted = Math.max(0, Math.min(AGENT_IDS.length, REAL_AGENT_COUNT));
+  if (wanted === 0) return [];
+  const stride = Math.max(1, Math.floor(AGENT_IDS.length / wanted));
   const picked: number[] = [];
-  for (let i = 0; i < 10 && picked.length < REAL_AGENT_COUNT; i += stride) {
+  for (let i = 0; i < AGENT_IDS.length && picked.length < wanted; i += stride) {
     picked.push(i);
   }
-  return picked;
+  // A stride that does not divide evenly leaves room; fill it in order.
+  for (let i = 0; i < AGENT_IDS.length && picked.length < wanted; i++) {
+    if (!picked.includes(i)) picked.push(i);
+  }
+  return picked.sort((a, b) => a - b);
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +158,16 @@ async function runRealAgent(
   catalogue: Catalogue,
   persona: Persona,
   open: OpenBrowser[],
+  slot: number,
 ): Promise<void> {
   const agentId = AGENT_IDS[agentIndex]!;
-  const apiKey = process.env.BROWSERBASE_API_KEY;
+
+  // Round-robin across the pool so no single account exceeds its concurrency.
+  const keyIndex = API_KEYS.length > 0 ? slot % API_KEYS.length : -1;
+  const apiKey = keyIndex >= 0 ? API_KEYS[keyIndex]! : undefined;
 
   if (!apiKey) {
-    agentLog.warn(`${agentId} cannot run: BROWSERBASE_API_KEY is not set`);
+    agentLog.warn(`${agentId} cannot run: no Browserbase key configured`);
     emitAgentEvent(run, agentId, 1, "fail", "BROWSERBASE_API_KEY is not set");
     return;
   }
@@ -155,6 +186,8 @@ async function runRealAgent(
 
     agentLog.info(`${agentId} browser ready`, {
       ms: since(launchedAt),
+      // Index only — a key must never reach a log line.
+      key: `${keyIndex + 1}/${API_KEYS.length}`,
       brief: persona.prompt.slice(0, 60),
       session: browser.sessionId
         ? `https://browserbase.com/sessions/${browser.sessionId}`
