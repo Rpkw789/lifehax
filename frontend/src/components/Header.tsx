@@ -4,9 +4,10 @@ import { useRun, type StepKey } from "@/lib/run-context";
 import styles from "./Header.module.css";
 
 const META: Record<StepKey, string> = {
-  input: "stage 0 of 2 · input",
-  check: "stage 1 of 2 · check",
-  recommend: "stage 2 of 2 · recommend",
+  input: "stage 0 of 3 · input",
+  check: "stage 1 of 3 · check",
+  recommend: "stage 2 of 3 · recommend",
+  dashboard: "stage 3 of 3 · dashboard",
 };
 
 function titleFor(step: StepKey, storeHost: string): string {
@@ -17,6 +18,8 @@ function titleFor(step: StepKey, storeHost: string): string {
       return storeHost;
     case "recommend":
       return `Findings · ${storeHost}`;
+    case "dashboard":
+      return `Dashboard · ${storeHost}`;
   }
 }
 

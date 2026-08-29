@@ -32,9 +32,9 @@ import type {
   Surface,
 } from "./types";
 
-export type StepKey = "input" | "check" | "recommend";
+export type StepKey = "input" | "check" | "recommend" | "dashboard";
 
-export const STEP_ORDER: readonly StepKey[] = ["input", "check", "recommend"];
+export const STEP_ORDER: readonly StepKey[] = ["input", "check", "recommend", "dashboard"];
 
 /** Ten agents, two per brief. Ids are assigned by the backend. */
 export const AGENT_IDS = Array.from(

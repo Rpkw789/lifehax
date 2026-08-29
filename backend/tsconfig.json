@@ -16,7 +16,12 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "jsxImportSource": "hono/jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@contracts/*": ["../shared/contracts/*"],
+      "@fixtures/*": ["../shared/fixtures/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../shared/contracts"]
 }

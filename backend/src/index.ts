@@ -14,6 +14,8 @@ import { streamSSE } from "hono/streaming";
 import { runPopulation } from "./agents";
 import { snapshot } from "./catalogue";
 import { runChecks } from "./checks";
+import { createEvaluateRoutes } from "./evaluate/api/evaluate";
+import { openFindingsStore } from "./evaluate/store/findings";
 import { computeSurfaces, deriveFindings } from "./findings";
 import { llmConfigured } from "./llm";
 import { log, since } from "./log";
@@ -59,6 +61,10 @@ app.get("/health", (c) =>
     browserbase: Boolean(process.env.BROWSERBASE_API_KEY),
   }),
 );
+
+// The Evaluate lane: contract-driven rules over a posted CheckResult. It owns
+// POST /runs/:id/evaluate and is independent of the SSE run above.
+app.route("/", createEvaluateRoutes(openFindingsStore()));
 
 app.post("/runs", async (c) => {
   let body: Partial<RunInput>;
