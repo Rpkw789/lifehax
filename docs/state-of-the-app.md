@@ -28,9 +28,11 @@ credentials and a public store.
   brand, domain, or canonical URL to that brief. Citations and fetched pages are
   matched to the target deterministically; model output never decides discovery,
   identity, rank, recommendation, or score.
-- When Cloudflare credentials are configured, all three methods can receive a
-  bounded model-generated critique whose points must cite evidence IDs from the
-  same run. Invalid critiques retry once, then fall back without killing the run.
+- When `OPENAI_API_KEY` is configured, all three methods use the OpenAI
+  Responses API directly. Protocol and guide receive bounded model-generated
+  critiques whose points must cite evidence IDs from the same run; Web search
+  uses the hosted `web_search` tool, then a separate structured ranking call.
+  Invalid critiques retry once, then fall back without killing the run.
 - Surface progress uses the shared append-only `SurfaceSimulationEvent`. The run
   store deduplicates and replays events in sequence order; the frontend performs
   a second idempotent fold for reconnects.
@@ -55,35 +57,33 @@ credentials and a public store.
 Recorded tests make no network calls.
 
 ```text
-backend:  171 tests passed, 0 failed; tsc --noEmit passed
+backend:  176 tests passed, 0 failed; tsc --noEmit passed
 frontend:  12 tests passed, 0 failed; tsc --noEmit passed
 frontend:  next build completed successfully
 ```
 
-The backend import walk reports 51 live modules and 8 dark modules out of 59
-non-test TypeScript modules. The remaining dark set is the standalone newer
-full-run orchestrator, native-search lane, environment adapter, and fixture
-loader; the shared Cloudflare search client, safe origin fetcher, deterministic
-matcher/scorer, and surface stack are live through `index.ts`.
+The surface provider is selected in `index.ts`; existing persona generation and
+written findings remain on Cloudflare. The direct OpenAI key stays server-side
+and is never included in events, evidence, reports, or error messages.
 
 ## Runtime requirements and graceful degradation
 
-Model and shared Web-search calls use:
+The three additional surface simulations use:
 
 ```text
-POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1/messages
-Authorization: Bearer <CLOUDFLARE_API_TOKEN>
+POST https://api.openai.com/v1/responses
+Authorization: Bearer <OPENAI_API_KEY>
 ```
 
-The token needs `Account > Workers AI > Read`, the account needs Unified Billing
-credits, and `HAPPY2_MODEL` is provider-prefixed. If credentials are missing or
-a model call fails, protocol/guide HTTP evidence still runs, critiques fall back,
-and Web search records `AGENT_ERROR` rather than aborting the overall run.
+Their model defaults to `gpt-5-mini` and can be changed with
+`HAPPY2_OPENAI_MODEL`. If credentials are missing or a model call fails,
+protocol/guide HTTP evidence still runs, critiques fall back, and Web search
+records `AGENT_ERROR` rather than aborting the overall run. Other model-backed
+workflows retain their existing Cloudflare configuration.
 
-No live public-store run was claimed during this implementation because the
-verification environment did not provide runtime credentials. The production
-build required network access only to fetch the project’s configured Google
-fonts.
+A credential-safe direct structured-output call and hosted Web-search call were
+verified with `gpt-5-mini`; the search-plus-ranking path returned ten bounded
+citations and one candidate in 16.3 seconds. No full public-store run is claimed.
 
 ## Known limitations that remain
 

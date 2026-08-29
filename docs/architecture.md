@@ -79,15 +79,23 @@ backend/src/
     archetypes.ts         category-agnostic intent archetypes
     generate.ts           model call → PersonaBrief[]
 
+  models/
+    openai.ts             direct Responses transport and structured outputs
+
   agents/
     types.ts              ShopperAgent interface, RunContext
     shared-search.ts      Cloudflare AI Gateway + Anthropic web_search
+    openai.ts             direct OpenAI Responses web search + ranking
+    openai-search.ts      surface search agent over the OpenAI client
     native-search.ts      claude-opus-5 with hosted web_search
     match.ts              deterministic URL matching → hit, rank, competitors
 
   audit/
     probes.ts             llms.txt, /.well-known/*, sitemap, robots
     structured.ts         JSON-LD and Offer coverage, client-side price
+
+  surfaces/
+    openai.ts             OpenAI-only services for the three surface simulations
 
   score/
     compute.ts            RunScores from shoppers + audit

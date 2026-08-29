@@ -1,7 +1,7 @@
 # Happy2 — Evidence-backed surface simulations
 
 **Date:** 2026-08-29
-**Status:** Approved, pre-implementation
+**Status:** Approved and implemented; provider amendment approved 2026-08-29
 
 ## Problem
 
@@ -49,7 +49,9 @@ This design extends, rather than re-litigates, the decisions in
 - No product category appears in production code. The product and brief are
   runtime values selected from the submitted store.
 - Every criticism cites observed evidence.
-- Model calls continue to use `backend/src/llm.ts` and Cloudflare AI Gateway.
+- Existing non-surface model calls continue through Cloudflare. The three
+  additional surface simulations call the OpenAI Responses API directly through
+  `backend/src/llm.ts`, using strict structured outputs and hosted Web search.
 - Model failures degrade one critique and never kill a run.
 
 ## Shared simulation context
@@ -160,7 +162,7 @@ lists that guide an agent to more detailed sources.
 
 ## Web-search simulation
 
-The search worker reuses the existing hosted-search agent and its structured
+The search worker uses an OpenAI Responses `web_search` agent and its structured
 ranking path. It sends only the shared shopper brief, locale, and currency. The
 target brand and product are not disclosed to the search model.
 

@@ -1,6 +1,6 @@
 import type { Evidence, TargetProduct } from "@contracts/check-result";
 import type { SurfaceSimulationKey } from "@contracts/surface-simulation";
-import { completeJson, type JsonSchema } from "../llm.ts";
+import { completeOpenAiJson, type JsonSchema } from "../llm.ts";
 import type { SurfaceCritique } from "./types.ts";
 
 const CRITIQUE_POINT_SCHEMA = {
@@ -58,7 +58,7 @@ export type SurfaceCritiqueClient = (
 export async function requestSurfaceCritique(
   input: SurfaceCritiqueInput,
   client: SurfaceCritiqueClient = (system, user, schema, signal) =>
-    completeJson<unknown>(system, user, schema, 8_000, { signal }),
+    completeOpenAiJson<unknown>(system, user, schema, 8_000, { signal }),
 ): Promise<SurfaceCritiqueResult> {
   const allowedEvidenceIds = new Set(
     input.evidence.map((item) => item.evidence_id),

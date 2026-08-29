@@ -86,8 +86,11 @@ plaintext, a log line, an `AgentEvent`, or an error message.
 
 ## Model usage
 
-Model calls go through the **Cloudflare AI Gateway REST API**, not a provider
-SDK. One entry point: `backend/src/llm.ts`.
+Model calls use plain REST through `backend/src/llm.ts`; do not add a provider
+SDK. Existing persona generation and diagnosis use the **Cloudflare AI Gateway
+REST API**. The three additional surface simulations are the approved exception:
+their ACP/UCP critique, `llms.txt` critique, Web search, and Web-search critique
+call the **OpenAI Responses API directly**.
 
 - `POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1/messages`,
   which speaks the Anthropic Messages schema verbatim. Plain `fetch`, no SDK.
@@ -102,8 +105,13 @@ SDK. One entry point: `backend/src/llm.ts`.
 - Structured outputs are not relied on surviving the gateway. Ask for JSON in
   the system prompt and parse defensively — `completeJson()` does this, with one
   retry that shows the model its own broken output.
+- Surface calls use `POST https://api.openai.com/v1/responses` with
+  `OPENAI_API_KEY`, default to `gpt-5-mini`, and can be overridden with
+  `HAPPY2_OPENAI_MODEL`. Use Responses `web_search` for the Web-search surface
+  and strict JSON-schema output for critiques and ranking.
 - A failed model call must never kill a run. Persona generation and diagnosis
-  both fall back to deterministic paths; the HTTP audit is the real payload.
+  fall back to deterministic paths; surface critique/search failures degrade
+  only their worker; the HTTP audit is the real payload.
 
 ## Testing
 

@@ -46,6 +46,7 @@ Keys upgrade the run rather than enable it.
 | --- | --- | --- |
 | `BROWSERBASE_API_KEYS` | the real browser agents | those agents report the key is missing |
 | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | generated briefs and written findings | archetype briefs, rule-based findings |
+| `OPENAI_API_KEY` | ACP/UCP and `llms.txt` critiques plus the additional Web-search simulation | HTTP surface evidence still runs; critiques fall back and Web search reports unavailable |
 
 The Cloudflare token must be an **AI Gateway token** with the `AI Gateway Run`
 permission, created inside the gateway's own Settings. A general Cloudflare API
@@ -63,7 +64,7 @@ Check what a running server picked up:
 
 ```sh
 curl -s localhost:3201/health
-# {"ok":true,"llm":true,"browserbase":true}
+# {"ok":true,"llm":true,"surfaceOpenAi":true,"browserbase":true}
 ```
 
 That reports whether the variables are *set*, not whether they *work*. If

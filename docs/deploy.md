@@ -22,6 +22,8 @@ Both services deploy from `render.yaml` at the repo root.
    - `CLOUDFLARE_API_TOKEN` — an **AI Gateway token** (permission: AI Gateway
      Run), not a general Cloudflare API token. A general token fails with a
      bare `401 Authentication error` that does not mention permissions.
+   - `OPENAI_API_KEY` — direct Responses API access for the ACP/UCP,
+     `llms.txt`, and Web-search surface simulations.
    - `NEXT_PUBLIC_API_BASE` — leave blank for now, see step 4
 
    `CLOUDFLARE_GATEWAY_ID` is set in the blueprint and must match the gateway's
@@ -56,8 +58,9 @@ below).
 
 ### The cost that isn't Render's
 
-Render is free. Anthropic tokens through the Cloudflare AI Gateway and
-Browserbase are not. Browserbase's free tier is **1 browser-hour per account**,
+Render is free. Anthropic tokens through the Cloudflare AI Gateway, OpenAI
+Responses and Web-search usage, and Browserbase are not. Browserbase's free
+tier is **1 browser-hour per account**,
 and a run burns one browser-hour multiple of its wall-clock per real agent —
 nine agents across three pooled keys spend roughly three hours' worth of
 allowance per hour of demoing, drawn from whichever accounts the keys belong to.

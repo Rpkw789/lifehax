@@ -12,8 +12,6 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 
 import { runPopulation } from "./agents";
-import { CloudflareWebSearchClient } from "./agents/cloudflare";
-import { SharedSearchAgent } from "./agents/shared-search";
 import { snapshot } from "./catalogue";
 import { OriginFetcher } from "./catalogue/fetch";
 import { systemHostLookup } from "./catalogue/security";
@@ -29,6 +27,7 @@ import {
   createSurfaceEventEmitter,
   runSurfaceSimulations,
 } from "./surfaces/orchestrate";
+import { createOpenAiSurfaceServicesFromEnv } from "./surfaces/openai";
 import type { StreamMessage } from "./store";
 import type { Run, RunInput } from "./types";
 
@@ -66,6 +65,7 @@ app.get("/health", (c) =>
   c.json({
     ok: true,
     llm: llmConfigured(),
+    surfaceOpenAi: Boolean(process.env.OPENAI_API_KEY?.trim()),
     browserbase: Boolean(process.env.BROWSERBASE_API_KEY),
   }),
 );
@@ -291,13 +291,7 @@ async function orchestrate(run: Run): Promise<void> {
   });
   publish(run, { type: "checks", checks });
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
-  const searchAgent = accountId && apiToken
-    ? new SharedSearchAgent(
-        new CloudflareWebSearchClient({ accountId, apiToken }),
-      )
-    : undefined;
+  const surfaceOpenAi = createOpenAiSurfaceServicesFromEnv(process.env);
   const fetcher = new OriginFetcher(catalogue.origin, systemHostLookup);
   const emitSurfaceEvent = createSurfaceEventEmitter((event) => {
     publish(run, { type: "surface_simulation", event });
@@ -321,7 +315,8 @@ async function orchestrate(run: Run): Promise<void> {
     },
     {
       emitForWorker: emitSurfaceEvent,
-      agent: searchAgent,
+      agent: surfaceOpenAi?.agent,
+      critiqueClient: surfaceOpenAi?.critiqueClient,
     },
   );
   const [, checkResult] = await Promise.all([
@@ -355,6 +350,9 @@ async function orchestrate(run: Run): Promise<void> {
 
 log.info(`listening on http://localhost:${PORT}`, {
   llm: llmConfigured() ? "configured" : "MISSING (using fallbacks)",
+  surfaceOpenAi: process.env.OPENAI_API_KEY?.trim()
+    ? "configured"
+    : "MISSING (surface critiques/search will degrade)",
   browserbase: process.env.BROWSERBASE_API_KEY
     ? "configured"
     : "MISSING (real agents will fail)",

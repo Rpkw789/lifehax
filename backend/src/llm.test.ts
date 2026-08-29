@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { completeJson, LlmError } from "./llm.ts";
+import { completeJson, completeOpenAiJson, LlmError } from "./llm.ts";
 
 describe("completeJson", () => {
   test("uses the Cloudflare account messages endpoint and provider-prefixed model", async () => {
@@ -106,5 +106,59 @@ describe("completeJson", () => {
       },
     );
     expect(receivedSameSignal).toBe(true);
+  });
+});
+
+describe("completeOpenAiJson", () => {
+  test("posts a strict JSON-schema request directly to the Responses API", async () => {
+    let requestedUrl = "";
+    let authorization = "";
+    let body: Record<string, unknown> = {};
+    const result = await completeOpenAiJson<{ ok: boolean }>(
+      "Use the supplied evidence only.",
+      "Assess this surface.",
+      {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+      1_000,
+      {
+        apiKey: "openai-secret",
+        model: "gpt-5-mini",
+        transport: async (url, init) => {
+          requestedUrl = String(url);
+          authorization = new Headers(init?.headers).get("authorization") ?? "";
+          body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return Response.json({
+            id: "resp_test",
+            status: "completed",
+            output: [
+              {
+                type: "message",
+                role: "assistant",
+                content: [
+                  {
+                    type: "output_text",
+                    text: JSON.stringify({ ok: true }),
+                    annotations: [],
+                  },
+                ],
+              },
+            ],
+          });
+        },
+      },
+    );
+
+    expect(requestedUrl).toBe("https://api.openai.com/v1/responses");
+    expect(authorization).toBe("Bearer openai-secret");
+    expect(body.model).toBe("gpt-5-mini");
+    expect(body.store).toBe(false);
+    expect(body.max_output_tokens).toBe(1_000);
+    expect((body.text as { format: { type: string; strict: boolean } }).format)
+      .toMatchObject({ type: "json_schema", strict: true });
+    expect(result).toEqual({ ok: true });
   });
 });

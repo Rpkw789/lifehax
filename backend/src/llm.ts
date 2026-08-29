@@ -1,13 +1,21 @@
 /**
- * The one LLM entry point. Cloudflare's account REST endpoint accepts the
- * Anthropic Messages schema directly and bills provider-prefixed models via
- * Unified Billing. No provider SDK or provider key is used here.
+ * The model transport boundary. Existing generation uses Cloudflare's account
+ * Messages endpoint; the three surface simulations use OpenAI Responses
+ * directly. Both paths use plain fetch and keep credentials out of logs.
  */
 
 import { logger, since } from "./log";
 
 const llmLog = logger("llm");
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5";
+
+export {
+  completeOpenAiJson,
+  createOpenAiResponse,
+  openAiConfigured,
+  openAiOutputText,
+} from "./models/openai.ts";
+export type { OpenAiResponseOptions } from "./models/openai.ts";
 
 export class LlmError extends Error {}
 
