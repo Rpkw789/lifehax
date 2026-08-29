@@ -6,8 +6,8 @@
  * findings. Dependency-free on purpose — no schema library to keep in sync.
  */
 
-import { ATTRIBUTE_SCOPED_CODES, FAILURE_CODES, REASON_CODES } from "./codes";
-import { REPORT_TYPE, SCHEMA_VERSION, type CheckResult } from "./check-result";
+import { ATTRIBUTE_SCOPED_CODES, FAILURE_CODES, REASON_CODES } from "./codes.ts";
+import { REPORT_TYPE, SCHEMA_VERSION, type CheckResult } from "./check-result.ts";
 
 export interface ValidationError {
   path: string;

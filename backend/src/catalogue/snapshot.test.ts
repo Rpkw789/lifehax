@@ -59,6 +59,22 @@ test("snapshotStore counts product pages discovered from the sitemap", async () 
   assert.equal(result.siteAudit.structured_data.products_total, 2);
 });
 
+test("snapshotStore checks robots before fetching the target and stops when disallowed", async () => {
+  const fetched: string[] = [];
+  const fetcher: DocumentFetcher = {
+    async get(url) {
+      fetched.push(url);
+      return doc(url, 200, "User-agent: Happy2Agent\nDisallow: /", "text/plain");
+    },
+  };
+
+  await assert.rejects(
+    snapshotStore({ storeUrl, targetProductUrl: targetUrl, fetchedAt: "2026-08-29T00:00:00.000Z", fetcher }),
+    /robots.txt disallows Happy2Agent/,
+  );
+  assert.deepEqual(fetched, [`${storeUrl}/robots.txt`]);
+});
+
 function doc(url: string, status: number, body: string, contentType = "text/html"): FetchedDocument {
   return { url, status, body, contentType, durationMs: 3 };
 }

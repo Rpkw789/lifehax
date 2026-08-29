@@ -28,3 +28,23 @@ test("OriginFetcher rejects a redirect away from the submitted origin", async ()
 
   await assert.rejects(fetcher.get("https://shop.example/items/alpha"), /redirect left the submitted origin/);
 });
+
+test("OriginFetcher spaces outbound requests using its per-origin limiter", async () => {
+  let clock = 0;
+  const sleeps: number[] = [];
+  const fetcher = new OriginFetcher(
+    "https://shop.example",
+    publicLookup,
+    async () => new Response("ok"),
+    {
+      minIntervalMs: 100,
+      now: () => clock,
+      sleep: async (ms) => { sleeps.push(ms); clock += ms; },
+    },
+  );
+
+  await fetcher.get("https://shop.example/one");
+  await fetcher.get("https://shop.example/two");
+
+  assert.deepEqual(sleeps, [100]);
+});

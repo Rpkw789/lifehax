@@ -3,14 +3,14 @@ import { isIP } from "node:net";
 
 export type HostLookup = (hostname: string) => Promise<string[]>;
 
-const systemLookup: HostLookup = async (hostname) => {
+export const systemHostLookup: HostLookup = async (hostname) => {
   const records = await dnsLookup(hostname, { all: true, verbatim: true });
   return records.map((record) => record.address);
 };
 
 export async function assertPublicHttpUrl(
   rawUrl: string,
-  lookup: HostLookup = systemLookup,
+  lookup: HostLookup = systemHostLookup,
 ): Promise<URL> {
   let url: URL;
   try {
@@ -37,7 +37,7 @@ export async function assertPublicHttpUrl(
 export async function assertSameOriginTarget(
   storeUrl: string,
   targetProductUrl: string,
-  lookup: HostLookup = systemLookup,
+  lookup: HostLookup = systemHostLookup,
 ): Promise<{ store: URL; target: URL }> {
   const [store, target] = await Promise.all([
     assertPublicHttpUrl(storeUrl, lookup),

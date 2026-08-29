@@ -38,13 +38,6 @@ export interface StoreSnapshot {
 
 export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot> {
   const origin = new URL(input.storeUrl).origin;
-  const targetDocument = await input.fetcher.get(input.targetProductUrl, input.signal);
-  if (targetDocument.status < 200 || targetDocument.status >= 300) {
-    throw new Error(`target product returned HTTP ${targetDocument.status}`);
-  }
-  const extracted = extractProduct(targetDocument.body, targetDocument.url);
-  if (!extracted) throw new Error("target product could not be extracted");
-
   const probeUrls = {
     sitemap: `${origin}/sitemap.xml`,
     robots: `${origin}/robots.txt`,
@@ -52,9 +45,17 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
     agent_commerce: `${origin}/.well-known/agent-commerce`,
     ucp: `${origin}/.well-known/ucp`,
   } as const;
-  const [sitemap, robots, llms, agentCommerce, ucp] = await Promise.all([
+  const robots = await input.fetcher.get(probeUrls.robots, input.signal);
+  if (!robotsAllowAgent(robots)) throw new Error("robots.txt disallows Happy2Agent");
+  const targetDocument = await input.fetcher.get(input.targetProductUrl, input.signal);
+  if (targetDocument.status < 200 || targetDocument.status >= 300) {
+    throw new Error(`target product returned HTTP ${targetDocument.status}`);
+  }
+  const extracted = extractProduct(targetDocument.body, targetDocument.url);
+  if (!extracted) throw new Error("target product could not be extracted");
+
+  const [sitemap, llms, agentCommerce, ucp] = await Promise.all([
     input.fetcher.get(probeUrls.sitemap, input.signal),
-    input.fetcher.get(probeUrls.robots, input.signal),
     input.fetcher.get(probeUrls.llms_txt, input.signal),
     input.fetcher.get(probeUrls.agent_commerce, input.signal),
     input.fetcher.get(probeUrls.ucp, input.signal),
