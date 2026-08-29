@@ -1,0 +1,29 @@
+/*
+ * Tailwind, scoped to what the vendored Tremor chart needs.
+ *
+ * `@import "tailwindcss"` would pull in preflight, whose global reset changes
+ * margins, font sizes and heading styles across the whole document — it cannot
+ * be limited to one route, and it would restyle the five screens built on CSS
+ * Modules. Importing theme and utilities only avoids that.
+ */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+/*
+ * Dark mode in globals.css is the *absence* of data-theme under a dark system
+ * preference, plus an explicit [data-theme="dark"] opt-in. Tailwind's default
+ * `dark:` variant matches neither, so Tremor would stay light when Settings
+ * toggles dark. The block form is required here: a bare @custom-variant cannot
+ * be nested inside @media.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}

@@ -1,0 +1,90 @@
+/*
+ * Where AI shoppers are lost.
+ *
+ * One chevron per agent, so the marks are countable: seven lit and three dark
+ * is a fact you can read off the row without a number. The amber-to-red ramp
+ * is the same one the stepper uses, so a stage's colour means the same thing
+ * everywhere in the product.
+ */
+
+.lede {
+  font-size: 19px;
+  line-height: 1.35;
+  color: var(--ink);
+  margin: 0 0 3px;
+  font-weight: 500;
+}
+
+.sub {
+  font-size: 13px;
+  color: var(--tertiary);
+  margin: 0 0 24px;
+}
+
+.stream {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 156px auto 34px 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.name {
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The loss sits on the row it happened on, not in a block beneath it. */
+.loss {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lossCount {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--blocked);
+  white-space: nowrap;
+}
+
+.lossReason {
+  font-size: 12px;
+  color: var(--tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .stage {
+    grid-template-columns: 116px auto 30px;
+    row-gap: 4px;
+  }
+
+  .loss {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+
+  .lossReason {
+    white-space: normal;
+  }
+}

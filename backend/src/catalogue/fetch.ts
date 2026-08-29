@@ -11,6 +11,7 @@ interface RateLimitOptions {
 }
 
 const USER_AGENT = "Happy2Agent/1.0 (+https://happy2.example/agent)";
+const MAX_RESPONSE_BYTES = 1_000_000;
 
 export class OriginFetcher {
   readonly #origin: string;
@@ -60,7 +61,7 @@ export class OriginFetcher {
       return {
         url: url.href,
         status: response.status,
-        body: await response.text(),
+        body: await boundedText(response, MAX_RESPONSE_BYTES),
         contentType: response.headers.get("content-type") ?? "",
         durationMs: Math.max(0, Math.round(performance.now() - started)),
       };
@@ -85,6 +86,44 @@ export class OriginFetcher {
     this.#gate = turn.catch(() => undefined);
     await turn;
   }
+}
+
+async function boundedText(response: Response, limit: number): Promise<string> {
+  const declared = response.headers.get("content-length");
+  if (declared !== null) {
+    const bytes = Number(declared);
+    if (Number.isFinite(bytes) && bytes > limit) {
+      await response.body?.cancel();
+      throw new Error(`response exceeded ${limit} bytes`);
+    }
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel();
+        throw new Error(`response exceeded ${limit} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const complete = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    complete.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(complete);
 }
 
 function isRedirect(status: number): boolean {

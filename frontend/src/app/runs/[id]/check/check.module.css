@@ -305,6 +305,30 @@
   align-items: start;
 }
 
+.fullReport {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #101012;
+  color: #f7f7f8;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 11px 12px;
+}
+
+.fullReport summary {
+  cursor: pointer;
+  color: #d2d2d6;
+}
+
+.fullReport pre {
+  max-height: 520px;
+  overflow: auto;
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Browser agents need more room than a text feed; below this they stack. */
 /* Below this the four columns cannot all hold video and text, so the browser
    column takes a full row of its own and the three feeds share the next. */

@@ -19,13 +19,12 @@ Both services deploy from `render.yaml` at the repo root.
      proportionally more agents really browse; the backend sizes the population
      from the number of keys.
    - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_API_TOKEN` — an **AI Gateway token** (permission: AI Gateway
-     Run), not a general Cloudflare API token. A general token fails with a
-     bare `401 Authentication error` that does not mention permissions.
+   - `CLOUDFLARE_API_TOKEN` — a Cloudflare API token with **Account > Workers
+     AI > Read**. Third-party model usage is billed through Unified Billing.
+   - `OPENAI_API_KEY` — direct Responses API access for the ACP/UCP,
+     `llms.txt`, and Web-search surface simulations, and optionally the real
+     browser agents when `HAPPY2_AGENT_MODEL` selects an OpenAI model.
    - `NEXT_PUBLIC_API_BASE` — leave blank for now, see step 5
-
-   `CLOUDFLARE_GATEWAY_ID` is set in the blueprint and must match the gateway's
-   real name. `default` only works if a gateway is literally called that.
 4. Create the database **by hand**: **New → Postgres**, free plan, the same
    region as the services. The `databases:` block in `render.yaml` does *not*
    do this for you — see below. Then copy its **Internal Database URL** into
@@ -90,8 +89,9 @@ below).
 
 ### The cost that isn't Render's
 
-Render is free. Anthropic tokens through the Cloudflare AI Gateway and
-Browserbase are not. Browserbase's free tier is **1 browser-hour per account**,
+Render is free. Anthropic tokens through the Cloudflare AI Gateway, OpenAI
+Responses and Web-search usage, and Browserbase are not. Browserbase's free
+tier is **1 browser-hour per account**,
 and a run burns one browser-hour multiple of its wall-clock per real agent —
 nine agents across three pooled keys spend roughly three hours' worth of
 allowance per hour of demoing, drawn from whichever accounts the keys belong to.

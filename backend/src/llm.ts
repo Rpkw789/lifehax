@@ -1,136 +1,146 @@
 /**
- * The one LLM entry point, via Cloudflare AI Gateway's Anthropic
- * provider-native endpoint:
- *
- *   POST https://gateway.ai.cloudflare.com/v1/{account}/{gateway}/anthropic/v1/messages
- *
- * This speaks the Anthropic Messages API exactly, so structured outputs,
- * adaptive thinking and the rest are available unchanged. The gateway holds the
- * Anthropic key via BYOK, so no provider key appears here — authentication is
- * the AI Gateway token in `cf-aig-authorization`.
- *
- * Two things that cost an hour if you get them wrong:
- *   - The token is an **AI Gateway token** (permission `AI Gateway Run`), not a
- *     general Cloudflare API token. A normal API token fails with a bare
- *     `401 Authentication error` that says nothing about permissions.
- *   - `CLOUDFLARE_GATEWAY_ID` must be the gateway's real name. "default" only
- *     works if a gateway is literally called that.
- *
- * No SDK. Never log the token.
+ * The model transport boundary. Existing generation uses Cloudflare's account
+ * Messages endpoint; the three surface simulations use OpenAI Responses
+ * directly. Both paths use plain fetch and keep credentials out of logs.
  */
 
 import { logger, since } from "./log";
 
 const llmLog = logger("llm");
+const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5";
 
-const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
-/** Accept either name; this is the AI Gateway token, whatever it is called. */
-const TOKEN =
-  process.env.CLOUDFLARE_AIG_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN ?? "";
-const GATEWAY = process.env.CLOUDFLARE_GATEWAY_ID ?? "default";
-/**
- * The provider-native endpoint takes a bare Anthropic model id. The REST API on
- * api.cloudflare.com takes a provider-prefixed one ("anthropic/claude-..."), so
- * strip the prefix rather than 404 on a value that looks perfectly reasonable.
- */
-const MODEL = (process.env.HAPPY2_MODEL ?? "claude-opus-5").replace(
-  /^anthropic\//,
-  "",
-);
-
-const ENDPOINT = `https://gateway.ai.cloudflare.com/v1/${ACCOUNT}/${GATEWAY}/anthropic/v1/messages`;
-
-/** Opus/Sonnet/Fable 5 and the 4.6-4.8 family. Older models 400 on it. */
-const SUPPORTS_ADAPTIVE_THINKING =
-  /^claude-(opus|sonnet|fable|mythos)-5|^claude-opus-4-[678]|^claude-sonnet-4-6/.test(
-    MODEL,
-  );
+export {
+  completeOpenAiJson,
+  createOpenAiResponse,
+  openAiConfigured,
+  openAiOutputText,
+} from "./models/openai.ts";
+export type { OpenAiResponseOptions } from "./models/openai.ts";
 
 export class LlmError extends Error {}
 
-export function llmConfigured(): boolean {
-  return Boolean(ACCOUNT && TOKEN);
+export type JsonSchema = Record<string, unknown>;
+export type LlmTransport = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export interface CompleteJsonOptions {
+  accountId?: string;
+  apiToken?: string;
+  model?: string;
+  transport?: LlmTransport;
+  signal?: AbortSignal;
 }
 
-/** A JSON Schema describing the reply. Structured outputs enforce it. */
-export type JsonSchema = Record<string, unknown>;
+interface ResolvedOptions {
+  accountId: string;
+  apiToken: string;
+  model: string;
+  transport: LlmTransport;
+  signal?: AbortSignal;
+}
 
 interface MessagesResponse {
   content?: { type: string; text?: string }[];
-  stop_reason?: string;
-  error?: { message?: string };
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
-/**
- * Asks for a reply matching `schema` and returns it parsed.
- *
- * `output_config.format` makes the model emit conforming JSON rather than prose
- * we have to scrape, so there is no fence-stripping or retry loop here.
- */
+export function llmConfigured(options: CompleteJsonOptions = {}): boolean {
+  const resolved = resolveOptions(options);
+  return Boolean(resolved.accountId && resolved.apiToken);
+}
+
 export async function completeJson<T>(
   system: string,
   user: string,
   schema: JsonSchema,
   maxTokens = 8000,
+  options: CompleteJsonOptions = {},
 ): Promise<T> {
-  if (!llmConfigured()) {
+  const resolved = resolveOptions(options);
+  if (!resolved.accountId || !resolved.apiToken) {
     throw new LlmError(
       "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are not set — see backend/.env.example",
     );
   }
 
-  const startedAt = Date.now();
-  llmLog.info("request", { model: MODEL, gateway: GATEWAY, chars: user.length });
+  const schemaInstruction = [
+    system,
+    "Return only one JSON value matching this JSON Schema:",
+    JSON.stringify(schema),
+  ].join("\n\n");
+  let prompt = user;
 
-  const res = await fetch(ENDPOINT, {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const text = await sendMessage(
+      schemaInstruction,
+      prompt,
+      maxTokens,
+      resolved,
+    );
+    try {
+      return parseJsonText(text) as T;
+    } catch {
+      prompt = [
+        user,
+        "Your previous response was rejected because it was not valid JSON.",
+        "Return only corrected JSON matching the supplied schema.",
+        `Rejected response: ${text.slice(0, 2_000)}`,
+      ].join("\n\n");
+    }
+  }
+
+  throw new LlmError("model output was not valid JSON");
+}
+
+async function sendMessage(
+  system: string,
+  user: string,
+  maxTokens: number,
+  options: ResolvedOptions,
+): Promise<string> {
+  const startedAt = Date.now();
+  llmLog.info("request", { model: options.model, chars: user.length });
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}/ai/v1/messages`;
+  const response = await options.transport(endpoint, {
     method: "POST",
+    signal: options.signal,
     headers: {
-      "cf-aig-authorization": `Bearer ${TOKEN}`,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${options.apiToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: options.model,
       max_tokens: maxTokens,
-      // Adaptive thinking only exists on 4.6-and-later models; older ones
-      // reject it outright rather than ignoring it.
-      ...(SUPPORTS_ADAPTIVE_THINKING ? { thinking: { type: "adaptive" } } : {}),
-      output_config: { format: { type: "json_schema", schema } },
+      ...(supportsAdaptiveThinking(options.model)
+        ? { thinking: { type: "adaptive" } }
+        : {}),
       system,
       messages: [{ role: "user", content: user }],
     }),
   });
 
-  const raw = await res.text();
-
-  if (!res.ok) {
+  const raw = await response.text();
+  if (!response.ok) {
     llmLog.error("gateway rejected the request", {
-      status: res.status,
+      status: response.status,
       ms: since(startedAt),
-      body: raw.slice(0, 200),
-      ...(res.status === 401
-        ? {
-            hint: `is CLOUDFLARE_GATEWAY_ID ("${GATEWAY}") the real gateway name, and is the token an AI Gateway token with Run permission?`,
-          }
-        : {}),
     });
-    throw new LlmError(`gateway ${res.status}: ${raw.slice(0, 300)}`);
+    throw new LlmError(`gateway rejected the request with HTTP ${response.status}`);
   }
 
   let parsed: MessagesResponse;
   try {
     parsed = JSON.parse(raw) as MessagesResponse;
   } catch {
-    throw new LlmError(`gateway returned non-JSON: ${raw.slice(0, 200)}`);
+    throw new LlmError("gateway returned a malformed response");
   }
 
-  // Adaptive thinking puts thinking blocks alongside the answer; take the text.
-  const text = parsed.content?.find((b) => b.type === "text")?.text;
+  const text = parsed.content?.find((block) => block.type === "text")?.text;
   if (!text) {
-    const why = parsed.error?.message ?? raw.slice(0, 200);
-    llmLog.error("no completion returned", { ms: since(startedAt), why });
-    throw new LlmError(`gateway returned no completion: ${why}`);
+    llmLog.error("no completion returned", { ms: since(startedAt) });
+    throw new LlmError("gateway returned no completion");
   }
 
   llmLog.info("reply", {
@@ -138,15 +148,44 @@ export async function completeJson<T>(
     chars: text.length,
     out: parsed.usage?.output_tokens ?? 0,
   });
+  return text;
+}
 
+function resolveOptions(options: CompleteJsonOptions): ResolvedOptions {
+  const configuredModel =
+    options.model ?? process.env.HAPPY2_MODEL ?? DEFAULT_MODEL;
+  return {
+    accountId: options.accountId ?? process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+    apiToken: options.apiToken ?? process.env.CLOUDFLARE_API_TOKEN ?? "",
+    model: configuredModel.includes("/")
+      ? configuredModel
+      : `anthropic/${configuredModel}`,
+    transport: options.transport ?? fetch,
+    ...(options.signal ? { signal: options.signal } : {}),
+  };
+}
+
+function supportsAdaptiveThinking(model: string): boolean {
+  const bareModel = model.replace(/^anthropic\//, "");
+  return /^claude-(opus|sonnet|fable|mythos)-5|^claude-opus-4-[678]|^claude-sonnet-4-6/.test(
+    bareModel,
+  );
+}
+
+function parseJsonText(text: string): unknown {
+  const unfenced = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(unfenced) as unknown;
   } catch {
-    // Structured outputs should make this unreachable; if the API ever relaxes
-    // that guarantee we want a loud, specific failure rather than a silent one.
-    llmLog.error("structured output was not valid JSON", {
-      head: text.slice(0, 160).replace(/\s+/g, " "),
-    });
-    throw new LlmError("structured output was not valid JSON");
+    const objectStart = unfenced.indexOf("{");
+    const objectEnd = unfenced.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      return JSON.parse(unfenced.slice(objectStart, objectEnd + 1)) as unknown;
+    }
+    throw new Error("not JSON");
   }
 }

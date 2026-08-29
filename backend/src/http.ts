@@ -18,6 +18,7 @@ export interface Fetched {
   error: string | null;
   /** Final URL after redirects, when we followed them. */
   finalUrl: string;
+  truncated?: boolean;
 }
 
 export async function get(
@@ -40,6 +41,7 @@ export async function get(
     });
     // Cap the read so one enormous page cannot stall the run.
     const raw = await readBody(res);
+    const truncated = raw.length > maxBytes;
     if (LOG_HTTP) {
       httpLog.debug("GET", {
         url,
@@ -52,9 +54,10 @@ export async function get(
       url,
       status: res.status,
       ok: res.ok,
-      body: raw.length > maxBytes ? raw.slice(0, maxBytes) : raw,
+      body: truncated ? raw.slice(0, maxBytes) : raw,
       error: null,
       finalUrl: res.url || url,
+      truncated,
     };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -66,6 +69,7 @@ export async function get(
       body: "",
       error: reason,
       finalUrl: url,
+      truncated: false,
     };
   } finally {
     clearTimeout(timer);

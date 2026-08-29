@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 
-import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
+import { Attrition } from "./Attrition";
+import { SurfaceRadar } from "./SurfaceRadar";
 import styles from "./dashboard.module.css";
-import { Funnel } from "./Funnel";
 import { History } from "./History";
 
 export default function DashboardScreen() {
   const {
     runId,
+    restore,
     agents,
     events,
     surfaces,
@@ -22,6 +23,20 @@ export default function DashboardScreen() {
     complete,
     input,
   } = useRun();
+
+  // Reading a saved run takes a round trip, and "No run yet" is the wrong
+  // thing to say while the answer is still coming.
+  if (restore === "pending") {
+    return (
+      <div className={styles.screen}>
+        <div className={styles.column}>
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>Reading this run…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // The provider seeds a full agent population before anything runs, so an
   // empty `agents` never signals "no run" — an empty event stream does.
@@ -44,64 +59,35 @@ export default function DashboardScreen() {
   }
 
   const steps = funnelFromAgents(agents);
-  const settled = agents.filter((a) => a.settled);
-  const reachedCheckout = agents.filter((a) => a.progress >= 6).length;
-  const blocked = settled.filter((a) => a.blocked).length;
 
   return (
     <div className={styles.screen}>
       <div className={styles.column}>
-        <section>
-          <SectionLabel>
-            {complete ? "Run results" : running ? "Run in progress" : "Run results"}
-          </SectionLabel>
-          <div className={styles.tiles}>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>
-                {reachedCheckout}
-                <span className={styles.tileOf}>/{agents.length}</span>
-              </div>
-              <div className={styles.tileLabel}>Reached checkout</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{blocked}</div>
-              <div className={styles.tileLabel}>Blocked before it</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{catalogueCount}</div>
-              <div className={styles.tileLabel}>Products read</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{findings.length}</div>
-              <div className={styles.tileLabel}>Findings raised</div>
-            </div>
-          </div>
+        {/* The hero: where shoppers are lost. Everything else is context. */}
+        <section className={styles.hero}>
+          <Attrition steps={steps} total={agents.length} />
         </section>
 
-        <section>
-          <SectionLabel>Where agents dropped out</SectionLabel>
-          <Funnel steps={steps} />
-        </section>
+        {/* One line of context, rather than four tiles competing with the hero. */}
+        <p className={styles.context}>
+          {catalogueCount} products read
+          <span className={styles.sep}>·</span>
+          {findings.length} {findings.length === 1 ? "finding" : "findings"} raised
+          <span className={styles.sep}>·</span>
+          {running && !complete ? "run in progress" : "run complete"}
+        </p>
+
+        {surfaces.length > 0 ? (
+          <section>
+            <SectionLabel>Surface scores</SectionLabel>
+            <SurfaceRadar surfaces={surfaces} />
+          </section>
+        ) : null}
 
         <section>
           <SectionLabel>Past runs for this store</SectionLabel>
           <History storeUrl={input.storeUrl} />
         </section>
-
-        {surfaces.length > 0 ? (
-          <section>
-            <SectionLabel>Surface scores</SectionLabel>
-            <div className={styles.bars}>
-              {surfaces.map((surface) => (
-                <div className={styles.bar} key={surface.name}>
-                  <span>{surface.name}</span>
-                  <ChevronTrack count={18} fraction={surface.fraction} fill="var(--ink)" />
-                  <span className={styles.barValue}>{surface.score}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </div>
     </div>
   );

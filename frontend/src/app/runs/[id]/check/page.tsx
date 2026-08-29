@@ -9,13 +9,15 @@ import { SectionLabel } from "@/components/SectionLabel";
 import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
 import { elapsedLabel, logText } from "@/lib/simulation";
+import { surfaceConsoleState } from "@/lib/surface-events";
 import motion from "@/styles/motion.module.css";
 import styles from "./check.module.css";
 import { LivestreamTile } from "./LivestreamTile";
 import { SurfaceColumn } from "./SurfaceColumn";
+import { SurfaceConsole } from "./SurfaceConsole";
 import tileStyles from "./SurfaceColumn.module.css";
 import { UnifiedProgress } from "./UnifiedProgress";
-import { buildSurfaces } from "./surfaces";
+import { buildSurfaces, simulationKeyFor } from "./surfaces";
 
 /** One colour per surface. Browse keeps the ink so tiles stay neutral. */
 const SURFACE_COLORS: Record<string, string> = {
@@ -31,27 +33,30 @@ export default function CheckScreen() {
     runId,
     storeHost,
     tick,
+    restore,
     running,
     complete,
     error,
     startRun,
     agents,
     events,
-    personas,
     sessions,
     tileIds,
     briefs,
-    checks,
+    surfaceEvents,
+    checkResult,
   } = useRun();
   const started = useRef(false);
 
-  // Landing on this URL directly should start the run rather than sit dead.
+  // Landing on this URL directly should start a run rather than sit dead — but
+  // only once the id has been looked up. A URL naming a saved run is a request
+  // to read that run, and starting one here used to POST a fresh run against an
+  // empty store instead of showing it.
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || restore !== "none") return;
     started.current = true;
     if (!running && !complete) startRun();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [restore, running, complete, startRun]);
 
   const settled = agents.filter((a) => a.settled).length;
   const won = agents.filter((a) => a.ok).length;
@@ -59,10 +64,8 @@ export default function CheckScreen() {
 
   const surfaces = buildSurfaces({
     agents,
-    checks,
-    briefs,
-    host: storeHost,
-    tick,
+    surfaceEvents,
+    checkResult,
     complete,
   });
 
@@ -145,14 +148,27 @@ export default function CheckScreen() {
       <div className={styles.feeds}>
         {surfaces
           .filter((surface) => surface.key !== "browse")
-          .map((surface) => (
-            <SurfaceColumn
-              key={surface.key}
-              surface={surface}
-              tick={tick}
-              color={SURFACE_COLORS[surface.key]!}
-            />
-          ))}
+          .map((surface) => {
+            if (surface.key === "browse") return null;
+            const consoleState = surfaceConsoleState(
+              simulationKeyFor(surface.key),
+              surfaceEvents,
+              checkResult,
+            );
+            return (
+              <SurfaceColumn
+                key={surface.key}
+                surface={surface}
+                tick={tick}
+                color={SURFACE_COLORS[surface.key]!}
+              >
+                <SurfaceConsole
+                  events={consoleState.events}
+                  json={consoleState.json}
+                />
+              </SurfaceColumn>
+            );
+          })}
       </div>
 
       {surfaces
@@ -180,6 +196,13 @@ export default function CheckScreen() {
             </div>
           </SurfaceColumn>
         ))}
+
+      {checkResult && (
+        <details className={styles.fullReport}>
+          <summary>Full consolidated CheckResult JSON</summary>
+          <pre>{JSON.stringify(checkResult, null, 2)}</pre>
+        </details>
+      )}
 
       <SectionLabel className={styles.stagesLabel}>
         Journey stages · agents reaching each

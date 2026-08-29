@@ -3,6 +3,7 @@
  */
 
 import type { RunSummary } from "./history";
+import type { SavedRun } from "./hydrate";
 import type {
   AgentEvent,
   Checks,
@@ -12,6 +13,8 @@ import type {
   RunInput,
   Surface,
 } from "./types";
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3201";
@@ -24,6 +27,8 @@ export type StreamMessage =
   | { type: "sessions_closed" }
   | { type: "checks"; checks: Checks }
   | { type: "agent"; event: AgentEvent }
+  | { type: "surface_simulation"; event: SurfaceSimulationEvent }
+  | { type: "check_result"; result: CheckResult }
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
   | { type: "done"; status: "complete" | "error"; error: string | null };
 
@@ -83,6 +88,31 @@ export async function savePersonaOverrides(
   }
 }
 
+/**
+ * One saved run, whole. The stream is the only source for a run in flight, but
+ * a finished one is a document — and `GET /runs/:id` is the only route that
+ * falls back to the database, so it is the only way to read a run that has
+ * outlived the process that produced it.
+ *
+ * Returns null when there is no such run, which is an ordinary answer for a
+ * URL someone typed or a run that has been cleared.
+ */
+export async function getRun(runId: string): Promise<SavedRun | null> {
+  const res = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}`);
+  if (res.status === 404) return null;
+  const body = (await res.json()) as
+    | SavedRun
+    | { error: { code: string; message: string } };
+  if (!res.ok || !("runId" in body)) {
+    // A run carries an `error` field of its own, so the two shapes are told
+    // apart by `runId` rather than by the presence of `error`.
+    throw new Error(
+      "runId" in body ? `backend returned ${res.status}` : body.error.message,
+    );
+  }
+  return body;
+}
+
 export async function createRun(input: RunInput): Promise<string> {
   const res = await fetch(`${API_BASE}/runs`, {
     method: "POST",
@@ -129,6 +159,8 @@ export function subscribeToRun(
     "sessions_closed",
     "checks",
     "agent",
+    "surface_simulation",
+    "check_result",
     "findings",
     "done",
   ]) {

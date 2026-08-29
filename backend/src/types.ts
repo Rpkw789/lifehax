@@ -7,6 +7,9 @@
  * for why they diverge.
  */
 
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
+
 /** The six journey stages, in order. Stages are 1-indexed on the wire. */
 export type StageName =
   | "discover"
@@ -91,6 +94,8 @@ export interface RunInput {
   sitemapUrl: string;
   testSkus: string;
   disabledPersonas: number[];
+  locale: string;
+  currency: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +126,10 @@ export interface Catalogue {
   /** The status the wall answered with, when `source` is `blocked`. */
   blockedStatus?: number | null;
   sitemapProductCount: number;
+  /** Product-looking URLs observed in the submitted/default sitemap. */
+  sitemapUrls: string[];
+  /** True only when every sitemap document needed for membership was read. */
+  sitemapComplete: boolean;
 }
 
 /** One HTTP probe. A missing resource is a finding, not an error. */
@@ -192,6 +201,8 @@ export interface Run {
   surfaces: Surface[];
   findings: Finding[];
   events: AgentEvent[];
+  surfaceEvents: SurfaceSimulationEvent[];
+  checkResult: CheckResult | null;
   /**
    * Live sessions for the agents that really browsed. The embeddable URL is
    * only valid while the session runs — Browserbase returns 410 once it stops.

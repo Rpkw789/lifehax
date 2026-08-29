@@ -19,10 +19,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
-import { createRun, subscribeToRun, type StreamMessage } from "./api";
+import { createRun, getRun, subscribeToRun, type StreamMessage } from "./api";
+import { hydrate } from "./hydrate";
 import { ARCHETYPE_PERSONAS, TILE_COUNT } from "./fixtures";
 import { agentStates } from "./simulation";
+import { appendSurfaceEvent } from "./surface-events";
 import type {
   AgentEvent,
   AgentState,
@@ -35,6 +39,9 @@ import type {
 
 export type StepKey = "input" | "check" | "recommend" | "dashboard";
 
+/** Whether the run id in the URL turned out to name a run the backend kept. */
+export type Restore = "pending" | "restored" | "none";
+
 export const STEP_ORDER: readonly StepKey[] = ["input", "check", "recommend", "dashboard"];
 
 /** Ten agents, two per brief. Ids are assigned by the backend. */
@@ -46,6 +53,12 @@ export const AGENT_IDS = Array.from(
 interface RunContextValue {
   /** The route's run id, which is also the backend run id once started. */
   runId: string;
+  /**
+   * What became of the attempt to restore this id from the backend.
+   * "pending" until the answer is known, so Check can wait rather than
+   * starting a second run on top of one it is about to load.
+   */
+  restore: Restore;
   /** Highest tick seen, driving the elapsed readout. */
   tick: number;
   running: boolean;
@@ -69,6 +82,10 @@ interface RunContextValue {
   briefs: string[];
   /** The site audit. Drives the protocol and guide columns on Check. */
   checks: Checks | null;
+  /** Real append-only progress for ACP/UCP, llms.txt, and Web search. */
+  surfaceEvents: SurfaceSimulationEvent[];
+  /** One contract-valid report consolidating the three simulations. */
+  checkResult: CheckResult | null;
   catalogueCount: number;
   /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
   sessions: Record<string, string>;
@@ -88,6 +105,8 @@ const DEFAULT_INPUT: RunInput = {
   sitemapUrl: "",
   testSkus: "",
   disabledPersonas: [],
+  locale: "en-US",
+  currency: "USD",
 };
 
 export function RunProvider({
@@ -102,6 +121,10 @@ export function RunProvider({
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [briefs, setBriefs] = useState<string[]>([]);
   const [checks, setChecks] = useState<Checks | null>(null);
+  const [surfaceEvents, setSurfaceEvents] = useState<
+    SurfaceSimulationEvent[]
+  >([]);
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [surfaces, setSurfaces] = useState<Surface[]>([]);
   const [catalogueCount, setCatalogueCount] = useState(0);
@@ -110,6 +133,7 @@ export function RunProvider({
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({});
+  const [restore, setRestore] = useState<Restore>("pending");
 
   const unsubscribe = useRef<(() => void) | null>(null);
   const started = useRef(false);
@@ -142,6 +166,14 @@ export function RunProvider({
       case "agent":
         setEvents((current) => [...current, message.event]);
         break;
+      case "surface_simulation":
+        setSurfaceEvents((current) =>
+          appendSurfaceEvent(current, message.event),
+        );
+        break;
+      case "check_result":
+        setCheckResult(message.result);
+        break;
       case "findings":
         setFindings(message.findings);
         setSurfaces(message.surfaces);
@@ -156,14 +188,84 @@ export function RunProvider({
     }
   }, []);
 
+  /**
+   * Restore the run named in the URL.
+   *
+   * The screens are fed by the event stream, which only exists while a run is
+   * in flight — so a run reached from Past runs had nothing behind it and every
+   * screen rendered its empty state. `GET /runs/:id` is the only route that
+   * falls back to the database, so it is what a finished run is read from;
+   * `/runs/:id/events` answers from memory alone and 404s for saved runs.
+   */
+  useEffect(() => {
+    let live = true;
+    setRestore("pending");
+
+    void getRun(runId)
+      .then((run) => {
+        if (!live) return;
+        // A run started in this session is the one on screen; it is newer than
+        // anything the id in the URL refers to.
+        if (started.current) {
+          setRestore("none");
+          return;
+        }
+        if (!run) {
+          setRestore("none");
+          return;
+        }
+
+        const state = hydrate(run);
+        setInput(state.input);
+        setEvents(state.events);
+        setPersonas(state.personas);
+        setBriefs(state.briefs);
+        setChecks(state.checks);
+        setSurfaces(state.surfaces);
+        setFindings(state.findings);
+        setSurfaceEvents(state.surfaceEvents);
+        setCheckResult(state.checkResult);
+        setCatalogueCount(state.catalogueCount);
+        setSessions(state.sessions);
+        setRunning(state.running);
+        setComplete(state.complete);
+        setError(state.error);
+        setRestore("restored");
+
+        // A run still in flight is still in memory, so it can be followed the
+        // rest of the way rather than frozen at the moment it was read.
+        if (state.running) {
+          unsubscribe.current?.();
+          unsubscribe.current = subscribeToRun(runId, handle, (message) => {
+            setError(message);
+            setRunning(false);
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        if (!live) return;
+        // A 404 is `null` above; reaching here means the backend is unreachable
+        // or broken, which is worth saying rather than showing "no run yet".
+        setError(err instanceof Error ? err.message : String(err));
+        setRestore("none");
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [runId, handle]);
+
   const startRun = useCallback(() => {
     if (started.current) return;
     started.current = true;
 
+    setRestore("none");
     setEvents([]);
     setSessions({});
     setBriefs([]);
     setChecks(null);
+    setSurfaceEvents([]);
+    setCheckResult(null);
     setFindings([]);
     setSurfaces([]);
     setError(null);
@@ -246,6 +348,7 @@ export function RunProvider({
   const value = useMemo<RunContextValue>(
     () => ({
       runId,
+      restore,
       tick,
       running,
       complete,
@@ -264,6 +367,8 @@ export function RunProvider({
       surfaces,
       briefs,
       checks,
+      surfaceEvents,
+      checkResult,
       catalogueCount,
       sessions,
       tileIds,
@@ -272,6 +377,7 @@ export function RunProvider({
     }),
     [
       runId,
+      restore,
       tick,
       running,
       complete,
@@ -288,6 +394,8 @@ export function RunProvider({
       surfaces,
       briefs,
       checks,
+      surfaceEvents,
+      checkResult,
       catalogueCount,
       sessions,
       tileIds,

@@ -6,7 +6,7 @@
  * which is how hard rule 1 ("no product category in source") is satisfied.
  */
 
-import { findNodes, get, jsonLdBlocks, resolve, toOrigin } from "./http";
+import { findNodes, get, jsonLdBlocks, resolve, toOrigin, type Fetched } from "./http";
 import type { Catalogue, CatalogueProduct } from "./types";
 
 const MAX_PRODUCTS = 12;
@@ -17,7 +17,8 @@ export async function snapshot(
 ): Promise<Catalogue> {
   const { origin, domain, entryUrl, hasPath } = toOrigin(storeUrl);
 
-  const sitemapUrls = await productUrlsFromSitemap(origin, sitemapOverride);
+  const sitemap = await observeSitemap(origin, sitemapOverride);
+  const sitemapProductUrls = sitemap.productUrls;
 
   // Shopify hands over the whole catalogue unauthenticated. Take it when it is
   // there — it is richer than anything we can scrape, and it costs one request.
@@ -30,12 +31,14 @@ export async function snapshot(
       hasPath,
       products: shopify.slice(0, MAX_PRODUCTS),
       source: "products.json",
-      sitemapProductCount: sitemapUrls.length,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
-  if (sitemapUrls.length > 0) {
-    const products = await productsFromPages(sitemapUrls.slice(0, MAX_PRODUCTS));
+  if (sitemapProductUrls.length > 0) {
+    const products = await productsFromPages(sitemapProductUrls.slice(0, MAX_PRODUCTS));
     return {
       domain,
       origin,
@@ -43,7 +46,9 @@ export async function snapshot(
       hasPath,
       products,
       source: "sitemap",
-      sitemapProductCount: sitemapUrls.length,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
@@ -67,7 +72,9 @@ export async function snapshot(
     products,
     source: products.length > 0 ? "homepage" : blocked ? "blocked" : "none",
     blockedStatus: blocked ? home.status : null,
-    sitemapProductCount: sitemapUrls.length,
+    sitemapProductCount: sitemapProductUrls.length,
+    sitemapUrls: sitemap.observedUrls,
+    sitemapComplete: sitemap.complete,
   };
 }
 
@@ -98,36 +105,52 @@ export function sitemapsDeclaredIn(robotsBody: string, origin: string): string[]
   return out;
 }
 
-async function declaredSitemaps(origin: string): Promise<string[]> {
-  const res = await get(resolve(origin, "/robots.txt"));
+async function declaredSitemaps(
+  origin: string,
+  fetchDocument: (url: string) => Promise<Fetched> = get,
+): Promise<string[]> {
+  const res = await fetchDocument(resolve(origin, "/robots.txt"));
   return res.ok ? sitemapsDeclaredIn(res.body, origin) : [];
 }
 
-/**
- * Follows a sitemap index down. Returns product-looking URLs.
- *
- * The declared order is not a ranking — a store may list its help pages first
- * and its catalogue last — so a sitemap that names itself for products is
- * tried before one that merely came first in robots.txt.
- */
+/** Follows a sitemap index one level down. Returns product-looking URLs. */
 export async function productUrlsFromSitemap(
   origin: string,
   override: string,
 ): Promise<string[]> {
+  return (await observeSitemap(origin, override)).productUrls;
+}
+
+export interface SitemapObservation {
+  productUrls: string[];
+  observedUrls: string[];
+  complete: boolean;
+}
+
+export async function observeSitemap(
+  origin: string,
+  override: string,
+  fetchDocument: (url: string) => Promise<Fetched> = get,
+): Promise<SitemapObservation> {
   // An explicit override is the operator speaking; do not second-guess it with
   // robots. Otherwise prefer what the site declares, and guess only last.
+  // The declared order is not a ranking — a store may list its help pages
+  // first and its catalogue last — so a sitemap that names itself for products
+  // is tried before one that merely came first in robots.txt.
   const candidates = override.trim()
     ? [resolve(origin, override.trim())]
     : productNamedFirst([
-        ...(await declaredSitemaps(origin)),
+        ...(await declaredSitemaps(origin, fetchDocument)),
         resolve(origin, "/sitemap.xml"),
       ]);
 
-  for (const candidate of candidates) {
-    const found = await productUrlsFrom(candidate);
-    if (found.length > 0) return found;
+  let fallback: SitemapObservation | null = null;
+  for (const candidate of unique(candidates)) {
+    const observation = await observeSitemapAt(candidate, fetchDocument);
+    if (observation.productUrls.length > 0) return observation;
+    if (!fallback && observation.observedUrls.length > 0) fallback = observation;
   }
-  return [];
+  return fallback ?? { productUrls: [], observedUrls: [], complete: false };
 }
 
 /** Stable partition: sitemaps naming products first, everything else after. */
@@ -167,7 +190,7 @@ const PRODUCT_ID_SEGMENT = /^(p-?\d{3,}|\d{4,}\.p)$/i;
 const SITEMAP_FILE = /\.(xml|xml\.gz|gz)$/i;
 
 /**
- * Product URLs reachable from one sitemap, following indexes down.
+ * Exact URLs and product candidates reachable from one sitemap.
  *
  * `trusted` means an ancestor named itself a product sitemap. That has to
  * travel downward because plenty of stores label only the index: Target's
@@ -175,35 +198,54 @@ const SITEMAP_FILE = /\.(xml|xml\.gz|gz)$/i;
  * which say nothing about themselves. Inside a trusted sitemap every leaf is a
  * product, whatever its URL looks like.
  */
-async function productUrlsFrom(
+async function observeSitemapAt(
   start: string,
+  fetchDocument: (url: string) => Promise<Fetched>,
   depth = 0,
   trusted = false,
-): Promise<string[]> {
-  const res = await get(start, { maxBytes: 16_000_000 });
-  if (!res.ok) return [];
+): Promise<SitemapObservation> {
+  const root = await fetchDocument(start);
+  if (!root.ok) return { productUrls: [], observedUrls: [], complete: false };
 
   const declared = trusted || PRODUCT_SITEMAP_NAME.test(fileName(start));
-  const locs = [...res.body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
+  const locs = [...root.body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
   const nested = locs.filter(isSitemapUrl);
   const leaves = locs.filter((u) => !isSitemapUrl(u));
 
+  // A sitemap the store itself calls "product" is a list of products, so take
+  // it at its word even when its page paths are not /products/.
   const direct = declared ? leaves : leaves.filter(isProductUrl);
-  if (direct.length > 0) return unique(direct);
-  if (nested.length === 0 || depth >= MAX_SITEMAP_DEPTH) return [];
+  const isIndex = nested.length > 0 || /<sitemapindex\b/i.test(root.body);
+  if (direct.length > 0 || !isIndex) {
+    return {
+      productUrls: unique(direct),
+      observedUrls: unique(leaves),
+      complete: root.truncated !== true,
+    };
+  }
+  if (nested.length === 0 || depth >= MAX_SITEMAP_DEPTH) {
+    return { productUrls: [], observedUrls: unique(leaves), complete: false };
+  }
 
   // Prefer children the store names as products. Failing that, open a small
   // index blind — but not a large one, where guessing costs 2,000 requests.
   const named = nested.filter((u) => PRODUCT_SITEMAP_NAME.test(fileName(u)));
   const candidates =
     named.length > 0 ? named : declared || nested.length <= SMALL_INDEX ? nested : [];
+  const chosen = candidates.slice(0, MAX_SITEMAP_CHILDREN);
 
-  const found: string[] = [];
-  for (const child of candidates.slice(0, MAX_SITEMAP_CHILDREN)) {
-    found.push(...(await productUrlsFrom(child, depth + 1, declared)));
-    if (found.length > MAX_SITEMAP_URLS) break;
+  const observed: string[] = [];
+  const products: string[] = [];
+  let complete = root.truncated !== true && chosen.length === nested.length;
+  for (const child of chosen) {
+    const sub = await observeSitemapAt(child, fetchDocument, depth + 1, declared);
+    observed.push(...sub.observedUrls);
+    products.push(...sub.productUrls);
+    if (!sub.complete) complete = false;
+    if (observed.length > MAX_SITEMAP_URLS) break;
   }
-  return unique(found);
+  if (observed.length > MAX_SITEMAP_URLS) complete = false;
+  return { productUrls: unique(products), observedUrls: unique(observed), complete };
 }
 
 /** The last path segment, which is where a sitemap carries its name. */
