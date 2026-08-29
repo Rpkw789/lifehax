@@ -15,5 +15,5 @@
       "@fixtures/*": ["../shared/fixtures/*"]
     }
   },
-  "include": ["src/**/*.ts", "../shared/**/*.ts"]
+  "include": ["src/**/*.ts", "../shared/contracts/**/*.ts"]
 }
