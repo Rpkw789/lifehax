@@ -64,14 +64,50 @@ export async function snapshot(
   };
 }
 
+/**
+ * Sitemaps a site declares in robots.txt, in the order given.
+ *
+ * This is how a store says where its sitemap actually is, and plenty do not
+ * use /sitemap.xml — bose.com serves 404 there and names sitemap_index.xml
+ * here, which is 207 products the crawler would otherwise never see.
+ */
+async function declaredSitemaps(origin: string): Promise<string[]> {
+  const res = await get(resolve(origin, "/robots.txt"));
+  if (!res.ok) return [];
+
+  const out: string[] = [];
+  for (const line of res.body.split(/\r?\n/)) {
+    const match = /^\s*sitemap\s*:\s*(\S+)\s*$/i.exec(line);
+    if (!match) continue;
+    try {
+      out.push(new URL(match[1]!, origin).toString());
+    } catch {
+      // A malformed Sitemap: line is not worth failing the whole crawl over.
+    }
+  }
+  return out;
+}
+
 /** Follows a sitemap index one level down. Returns product-looking URLs. */
 export async function productUrlsFromSitemap(
   origin: string,
   override: string,
 ): Promise<string[]> {
-  const start = override.trim()
-    ? resolve(origin, override.trim())
-    : resolve(origin, "/sitemap.xml");
+  // An explicit override is the operator speaking; do not second-guess it with
+  // robots. Otherwise prefer what the site declares, and guess only last.
+  const candidates = override.trim()
+    ? [resolve(origin, override.trim())]
+    : [...(await declaredSitemaps(origin)), resolve(origin, "/sitemap.xml")];
+
+  for (const candidate of candidates) {
+    const found = await productUrlsFrom(candidate);
+    if (found.length > 0) return found;
+  }
+  return [];
+}
+
+/** Product URLs reachable from one sitemap, following an index one level. */
+async function productUrlsFrom(start: string): Promise<string[]> {
   const root = await get(start);
   if (!root.ok) return [];
 
@@ -91,7 +127,14 @@ export async function productUrlsFromSitemap(
   const found: string[] = [];
   for (const child of children) {
     const res = await get(child);
-    if (res.ok) found.push(...locs(res.body).filter(isProductUrl));
+    if (res.ok) {
+      // A sitemap the site itself calls "product" is a list of products, so
+      // take it at its word. Bose's are /p/…​.html, which no /products/
+      // pattern would ever match, and filtering would discard all 207.
+      const declared = /product/i.test(child);
+      const urls = locs(res.body).filter((u) => !/\.xml$/i.test(u));
+      found.push(...(declared ? urls : urls.filter(isProductUrl)));
+    }
     if (found.length > 400) break;
   }
   return unique(found);
