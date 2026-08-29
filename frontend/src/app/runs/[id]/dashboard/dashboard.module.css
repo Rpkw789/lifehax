@@ -51,6 +51,10 @@
 }
 
 /* Drop reasons under the funnel: BarList shows the counts, these say why. */
+.surfaceTrack {
+  margin-top: 8px;
+}
+
 .surfaces {
   display: flex;
   flex-direction: column;

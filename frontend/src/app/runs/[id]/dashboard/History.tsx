@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { listRuns } from "@/lib/api";
+import { ChevronTrack } from "@/components/ChevronTrack";
 import { LineChart } from "@/vendor/tremor/LineChart";
-import { ProgressBar } from "@/vendor/tremor/ProgressBar";
 import { iterationsFor, type Iteration } from "@/lib/history";
 import styles from "./History.module.css";
 
@@ -103,7 +103,11 @@ function Metric({
 }) {
   return (
     <span className={styles.metric}>
-      <ProgressBar value={Math.min(100, (value / SCALE) * 100)} className={styles.bar} />
+      <ChevronTrack
+        count={SCALE}
+        fraction={Math.min(1, value / SCALE)}
+        fill="var(--ink)"
+      />
       <span className={styles.count}>
         {value} <span className={styles.unit}>{unit}</span>
       </span>

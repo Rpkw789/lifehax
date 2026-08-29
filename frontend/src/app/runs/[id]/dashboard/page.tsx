@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 
+import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
-import { ProgressBar } from "@/vendor/tremor/ProgressBar";
 import { Attrition } from "./Attrition";
 import styles from "./dashboard.module.css";
 import { History } from "./History";
@@ -72,7 +72,12 @@ export default function DashboardScreen() {
                     <span className={styles.surfaceName}>{surface.name}</span>
                     <span className={styles.surfaceScore}>{surface.score}</span>
                   </div>
-                  <ProgressBar value={surface.fraction * 100} className="mt-2" />
+                  <ChevronTrack
+                    className={styles.surfaceTrack}
+                    count={18}
+                    fraction={surface.fraction}
+                    fill="var(--ink)"
+                  />
                   {surface.note ? (
                     <p className={styles.surfaceNote}>{surface.note}</p>
                   ) : null}

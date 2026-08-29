@@ -2,28 +2,41 @@
 
 import { useEffect, useState } from "react";
 
+import { ChevronTrack } from "@/components/ChevronTrack";
 import type { FunnelStep } from "@/lib/funnel";
+import { ramp } from "@/lib/tokens";
 import styles from "./Attrition.module.css";
 
 /**
  * Where AI shoppers are lost.
  *
- * The product's whole claim is that agents fall out at identifiable gates, so
- * the page opens with the falling out rather than with summary tiles. Each
- * stage draws the surviving mass against the full cohort behind it; the gap is
- * the finding, and the reason is printed at the point where the bar stopped,
- * not in a legend.
+ * One chevron per agent: seven lit and three dark is countable, which a filled
+ * bar is not. Stage colour comes from the same amber-to-red ramp the stepper
+ * uses, so position in the journey reads the same way across the product, and
+ * the reason a stage lost agents sits on that stage's row rather than in a
+ * block underneath it.
+ *
+ * The tracks fill on mount in journey order — ChevronTrack already transitions
+ * each chevron over 420ms, so this needs no animation of its own.
  */
 export function Attrition({ steps, total }: { steps: FunnelStep[]; total: number }) {
-  const [drawn, setDrawn] = useState(false);
+  const [drawn, setDrawn] = useState(0);
 
   useEffect(() => {
-    // One frame, so the transition has a zero state to move from.
-    const id = requestAnimationFrame(() => setDrawn(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+    if (steps.length === 0) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setDrawn(steps.length);
+      return;
+    }
+    const timers = steps.map((_, i) =>
+      setTimeout(() => setDrawn((n) => Math.max(n, i + 1)), 60 + i * 110),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [steps]);
 
   const completed = steps[steps.length - 1]?.count ?? 0;
+  const lost = total - completed;
 
   return (
     <>
@@ -35,46 +48,33 @@ export function Attrition({ steps, total }: { steps: FunnelStep[]; total: number
             : `${completed} of ${total} AI shoppers reached checkout.`}
       </p>
       <p className={styles.sub}>
-        {total - completed > 0
-          ? `${total - completed} stopped somewhere earlier. The gaps below are where.`
+        {lost > 0
+          ? `${lost} stopped earlier. Each row shows who was left.`
           : "Every agent completed the journey."}
       </p>
 
       <ol className={styles.stream}>
         {steps.map((step, i) => (
-          <li key={step.key}>
-            <div className={styles.stage}>
-              <span className={styles.name}>{step.label}</span>
-              <span className={styles.track}>
-                <span
-                  className={styles.alive}
-                  style={{
-                    ["--alive" as string]: drawn ? step.fraction : 0,
-                    transitionDelay: `${i * 70}ms`,
-                  }}
-                />
+          <li className={styles.stage} key={step.key}>
+            <span className={styles.name}>{step.label}</span>
+            <ChevronTrack
+              count={total}
+              fraction={i < drawn ? step.fraction : 0}
+              fill={ramp(i, steps.length)}
+            />
+            <span className={styles.count}>{step.count}</span>
+            {step.lost > 0 && i < drawn ? (
+              <span className={styles.loss}>
+                <span className={styles.lossCount}>&minus;{step.lost}</span>
+                {step.reason ? (
+                  <span className={styles.lossReason} title={step.reason}>
+                    {step.reason}
+                  </span>
+                ) : null}
               </span>
-              <span className={styles.count}>{step.count}</span>
-            </div>
-
-            {step.lost > 0 ? (
-              <div className={styles.loss}>
-                <span />
-                <span
-                  className={styles.lossBody}
-                  // Start the reason where the bar stopped: at the loss.
-                  style={{
-                    ["--at" as string]: `${Math.round(step.fraction * 100)}%`,
-                    animationDelay: `${i * 70 + 420}ms`,
-                  }}
-                >
-                  <span className={styles.lossCount}>&minus;{step.lost}</span>
-                  {step.reason ? (
-                    <span className={styles.lossReason}>{step.reason}</span>
-                  ) : null}
-                </span>
-              </div>
-            ) : null}
+            ) : (
+              <span />
+            )}
           </li>
         ))}
       </ol>
