@@ -1,4 +1,4 @@
-.screen { padding: 32px 40px 80px; }
+.screen { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 40px 80px; }
 .column { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
 
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }

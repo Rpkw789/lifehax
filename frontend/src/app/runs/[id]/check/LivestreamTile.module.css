@@ -309,9 +309,33 @@
 
 .settledOutcome {
   position: relative;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--secondary);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+/* The outcome is the tile's whole message once it stops, so it gets an edge
+   and a mark rather than grey text floating on empty page chrome. */
+.settledBlocked {
+  border-left: 2px solid #d02a2a;
+}
+
+.settledOk {
+  border-left: 2px solid #0b8a5d;
+}
+
+.settledMark {
+  position: relative;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.settledBlocked .settledMark {
+  color: #d02a2a;
+}
+
+.settledOk .settledMark {
+  color: #0b8a5d;
 }
 
 .settledReason {

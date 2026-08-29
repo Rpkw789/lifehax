@@ -3,10 +3,12 @@
      so the screen is a single flow again. */
   padding: 0 28px 40px;
   min-width: 0;
+  /* The frame is a fixed 100vh, so every screen owns its own scroll. Without
+     this the page below the fold is simply unreachable. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
-
-/* Scrolls on both axes, so nothing is unreachable at narrow widths. */
-
 
 /* Run strip */
 .runStrip {
@@ -279,6 +281,21 @@
  * reach the store, evaluated in parallel, so they sit side by side rather
  * than stacked — the point is that they are happening at once.
  */
+/* Three probe feeds across the top. They are text, so they read fine narrow. */
+.feeds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1000px) {
+  .feeds {
+    grid-template-columns: 1fr;
+  }
+}
+
 .columns {
   display: grid;
   /* The browser column carries live video and is the thing people look at, so
