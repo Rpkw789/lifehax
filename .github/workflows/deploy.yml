@@ -13,6 +13,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Deploy without running the suite (demo emergencies only)"
+        type: boolean
+        default: false
 
 # Never let two deploys of the same service overlap; queue instead of cancel so
 # a superseded commit still finishes rather than leaving Render mid-update.
@@ -21,13 +26,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Nothing reaches Render that does not pass the same checks a PR would.
+  # Nothing reaches Render unverified. Both suites are offline, so this costs
+  # under a minute and is the only thing standing between a bad push and
+  # production — this repo commits straight to main, no PRs. The steps live in
+  # ci.yml so a deploy and a PR run byte-identical checks.
   verify:
     uses: ./.github/workflows/ci.yml
+    if: ${{ !inputs.skip_tests }}
 
   deploy:
     name: deploy ${{ matrix.name }}
     needs: verify
+    # `needs` alone would skip deploy when verify is skipped, so state the
+    # condition: run unless something actually failed.
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       # One service failing should not hide the other's result.

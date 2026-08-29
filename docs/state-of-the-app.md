@@ -6,6 +6,11 @@ walk from `backend/src/index.ts`; everything else is a grep or a live request.
 Rerun the walk with the snippet at the bottom before trusting these numbers —
 they move every time someone pushes.
 
+The prose goes stale faster than the numbers. The first version of this file
+claimed `fixtures.ts` still carried product-category strings; that was already
+untrue when it was written, because it was carried forward from an earlier grep
+without rechecking. Prefer the script to the paragraphs.
+
 ## What genuinely works
 
 Verified against a real run on `allbirds.com`:
@@ -99,11 +104,12 @@ agents shopped your store" is not currently true.
 - `RING_REGIONS`, `STAGE_PATHS`, `STAGE_ACTIONS` — focus rings, URL bars and
   action captions, all prototype copy.
 
-`STAGE_PASS_LOGS` feeds the console the same way. `TILE_IDS` is now unused and
-can go.
+`STAGE_PASS_LOGS` feeds the console the same way.
 
-Category strings live here too — `desk+lamp+dimmable`, `atlas-lamp` — which
-breaks the no-product-category rule in `AGENTS.md` once these reach real data.
+`STAGE_PATHS` replaced the older `STAGE_URLS` and is now generic — `/search`,
+`/products/…`, `/cart` — so the tiles no longer invent a product category. The
+only category words left in the repo are in a comment in
+`backend/src/personas.ts` explaining the rule, which is where they belong.
 
 ### 5. The Evaluate endpoint is unreachable by clicking
 
