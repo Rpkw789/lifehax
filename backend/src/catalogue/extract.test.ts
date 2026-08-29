@@ -45,6 +45,28 @@ test("extractProduct falls back to metadata without inventing absent facts", () 
   assert.equal(product.fieldSources.sku, "absent");
 });
 
+test("extractProduct reads microdata and visible HTML when JSON-LD is absent", () => {
+  const html = `<!doctype html>
+    <main itemscope itemtype="https://schema.org/Product">
+      <h1 itemprop="name">Alpha</h1>
+      <meta itemprop="sku" content="A-1">
+      <link itemprop="url" href="/items/alpha">
+      <data itemprop="price" value="21.50"></data>
+      <meta itemprop="priceCurrency" content="SGD">
+      <link itemprop="availability" href="https://schema.org/InStock">
+    </main>`;
+
+  const product = extractProduct(html, "https://shop.example/items/alpha");
+
+  assert.ok(product);
+  assert.equal(product.target.name, "Alpha");
+  assert.equal(product.target.sku, "A-1");
+  assert.deepEqual(product.target.price, { amount: 21.5, currency: "SGD" });
+  assert.equal(product.availability, "https://schema.org/InStock");
+  assert.equal(product.fieldSources.name, "raw-html");
+  assert.equal(product.fieldSources.price, "raw-html");
+});
+
 test("extractSitemapUrls decodes loc values from both urlsets and sitemap indexes", () => {
   const xml = `<sitemapindex>
     <sitemap><loc>https://shop.example/sitemap-products.xml</loc></sitemap>

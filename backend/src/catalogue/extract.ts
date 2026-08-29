@@ -17,23 +17,29 @@ export function extractProduct(html: string, pageUrl: string): ExtractedProduct 
   const jsonLdObjects = extractJsonLd(html);
   const product = jsonLdObjects.flatMap(flattenJsonLd).find(isProductObject);
   const metadata = extractMetadata(html);
+  const raw = extractRawProduct(html);
   const canonical = extractCanonical(html, pageUrl);
 
-  const name = stringValue(product?.name) ?? metadata["og:title"] ?? metadata["twitter:title"];
+  const name = stringValue(product?.name) ?? raw.name ?? metadata["og:title"] ?? metadata["twitter:title"];
   if (!name) return null;
 
   const productUrl = absoluteUrl(
-    stringValue(product?.url) ?? metadata["og:url"] ?? canonical,
+    stringValue(product?.url) ?? raw.url ?? metadata["og:url"] ?? canonical,
     pageUrl,
   );
-  const sku = stringValue(product?.sku);
-  const gtin = firstString(product, ["gtin", "gtin8", "gtin12", "gtin13", "gtin14"]);
+  const jsonSku = stringValue(product?.sku);
+  const sku = jsonSku ?? raw.sku;
+  const jsonGtin = firstString(product, ["gtin", "gtin8", "gtin12", "gtin13", "gtin14"]);
+  const gtin = jsonGtin ?? raw.gtin;
   const offers = firstObject(product?.offers);
   const jsonPrice = numberValue(offers?.price);
+  const rawPrice = numberValue(raw.price);
   const metaPrice = numberValue(metadata["product:price:amount"]);
-  const amount = jsonPrice ?? metaPrice;
-  const currency = stringValue(offers?.priceCurrency) ?? metadata["product:price:currency"];
-  const category = stringValue(product?.category);
+  const amount = jsonPrice ?? rawPrice ?? metaPrice;
+  const currency = stringValue(offers?.priceCurrency) ?? raw.currency ?? metadata["product:price:currency"];
+  const jsonCategory = stringValue(product?.category);
+  const category = jsonCategory ?? raw.category;
+  const availability = stringValue(offers?.availability) ?? raw.availability;
   const id = sku ?? gtin ?? lastPathSegment(productUrl);
 
   return {
@@ -46,18 +52,18 @@ export function extractProduct(html: string, pageUrl: string): ExtractedProduct 
       category,
       price: amount !== null && currency ? { amount, currency } : null,
     },
-    availability: stringValue(offers?.availability),
+    availability,
     attributes: scalarAttributes(product),
     fieldSources: {
-      name: product?.name !== undefined ? "json-ld" : "meta",
-      price: jsonPrice !== null ? "json-ld" : metaPrice !== null ? "meta" : "absent",
-      availability: offers?.availability !== undefined ? "json-ld" : "absent",
-      sku: sku ? "json-ld" : "absent",
-      gtin: gtin ? "json-ld" : "absent",
-      category: category ? "json-ld" : "absent",
+      name: product?.name !== undefined ? "json-ld" : raw.name ? "raw-html" : "meta",
+      price: jsonPrice !== null ? "json-ld" : rawPrice !== null ? "raw-html" : metaPrice !== null ? "meta" : "absent",
+      availability: offers?.availability !== undefined ? "json-ld" : raw.availability ? "raw-html" : "absent",
+      sku: jsonSku ? "json-ld" : raw.sku ? "raw-html" : "absent",
+      gtin: jsonGtin ? "json-ld" : raw.gtin ? "raw-html" : "absent",
+      category: jsonCategory ? "json-ld" : raw.category ? "raw-html" : "absent",
     },
     hasJsonLd: product !== undefined,
-    hasOffer: offers !== null,
+    hasOffer: offers !== null || rawPrice !== null || raw.availability !== null,
   };
 }
 
@@ -103,6 +109,56 @@ function extractMetadata(html: string): Record<string, string> {
     if (property && content) metadata[property.toLowerCase()] = decodeEntities(content);
   }
   return metadata;
+}
+
+interface RawProduct {
+  name: string | null;
+  url: string | null;
+  sku: string | null;
+  gtin: string | null;
+  price: string | null;
+  currency: string | null;
+  availability: string | null;
+  category: string | null;
+}
+
+function extractRawProduct(html: string): RawProduct {
+  const hasProductScope = /itemtype\s*=\s*["'][^"']*schema\.org\/Product["']/i.test(html);
+  const values = {
+    name: itemPropValue(html, "name"),
+    url: itemPropValue(html, "url"),
+    sku: itemPropValue(html, "sku"),
+    gtin: firstPresent(["gtin", "gtin8", "gtin12", "gtin13", "gtin14"].map((key) => itemPropValue(html, key))),
+    price: itemPropValue(html, "price"),
+    currency: itemPropValue(html, "priceCurrency"),
+    availability: itemPropValue(html, "availability"),
+    category: itemPropValue(html, "category"),
+  };
+  if (!hasProductScope && !values.sku && !values.gtin && !values.price) {
+    return { name: null, url: null, sku: null, gtin: null, price: null, currency: null, availability: null, category: null };
+  }
+  return values;
+}
+
+function itemPropValue(html: string, property: string): string | null {
+  const tagPattern = /<([a-z][\w:-]*)\b[^>]*>/gi;
+  for (const match of html.matchAll(tagPattern)) {
+    const tag = match[0];
+    const properties = attribute(tag, "itemprop")?.split(/\s+/) ?? [];
+    if (!properties.some((value) => value.toLowerCase() === property.toLowerCase())) continue;
+    const direct = attribute(tag, "content") ?? attribute(tag, "value") ?? attribute(tag, "href") ?? attribute(tag, "src");
+    if (direct) return decodeEntities(direct.trim());
+    const tagName = match[1];
+    const afterTag = html.slice((match.index ?? 0) + tag.length);
+    const closing = tagName ? afterTag.match(new RegExp(`^([\\s\\S]*?)<\\/${tagName}\\s*>`, "i")) : null;
+    const text = closing?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (text) return decodeEntities(text);
+  }
+  return null;
+}
+
+function firstPresent(values: Array<string | null>): string | null {
+  return values.find((value): value is string => value !== null) ?? null;
 }
 
 function extractCanonical(html: string, pageUrl: string): string {

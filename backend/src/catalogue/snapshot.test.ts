@@ -75,6 +75,28 @@ test("snapshotStore checks robots before fetching the target and stops when disa
   assert.deepEqual(fetched, [`${storeUrl}/robots.txt`]);
 });
 
+test("snapshotStore discovers a JSON feed when the target page has no product fields", async () => {
+  const feedUrl = `${storeUrl}/catalogue.json`;
+  const responses = new Map<string, FetchedDocument>([
+    [targetUrl, doc(targetUrl, 200, `<link rel="alternate" type="application/json" href="${feedUrl}">`)],
+    [feedUrl, doc(feedUrl, 200, JSON.stringify({ products: [
+      { id: "A-1", name: "Alpha", url: targetUrl, price: { amount: 20, currency: "SGD" }, availability: "in_stock" },
+      { id: "B-2", name: "Beta", url: `${storeUrl}/items/beta` },
+    ] }), "application/json")],
+    [`${storeUrl}/robots.txt`, doc(`${storeUrl}/robots.txt`, 200, "User-agent: *\nAllow: /", "text/plain")],
+  ]);
+  const fetcher: DocumentFetcher = { async get(url) { return responses.get(url) ?? doc(url, 404, ""); } };
+
+  const result = await snapshotStore({ storeUrl, targetProductUrl: targetUrl, fetchedAt: "2026-08-29T00:00:00.000Z", fetcher });
+
+  assert.equal(result.targetProduct.product_id, "A-1");
+  assert.equal(result.targetProduct.name, "Alpha");
+  assert.deepEqual(result.targetProduct.price, { amount: 20, currency: "SGD" });
+  assert.equal(result.catalogueSnapshot.target_field_sources.name, "feed");
+  assert.equal(result.catalogueSnapshot.products_readable, 2);
+  assert.equal(result.evidence.some((item) => item.url === feedUrl && item.kind === "fetch"), true);
+});
+
 function doc(url: string, status: number, body: string, contentType = "text/html"): FetchedDocument {
   return { url, status, body, contentType, durationMs: 3 };
 }

@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/contracts/check-result.ts";
 import { computeSiteAudit } from "../audit/compute.ts";
 import { extractProduct, extractSitemapUrls } from "./extract.ts";
+import { discoverFeedUrls, mergeProduct, parseProductFeed } from "./feed.ts";
 
 export interface FetchedDocument {
   url: string;
@@ -51,7 +52,18 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
   if (targetDocument.status < 200 || targetDocument.status >= 300) {
     throw new Error(`target product returned HTTP ${targetDocument.status}`);
   }
-  const extracted = extractProduct(targetDocument.body, targetDocument.url);
+  const pageProduct = extractProduct(targetDocument.body, targetDocument.url);
+  const feedDiscovery = await fetchProductFeeds(
+    discoverFeedUrls(targetDocument.body, targetDocument.url),
+    origin,
+    input.fetcher,
+    input.signal,
+  );
+  const feedProducts = feedDiscovery.documents.flatMap((document) =>
+    successful(document) ? parseProductFeed(document.body, document.contentType, document.url) : [],
+  );
+  const feedTarget = feedProducts.find((product) => sameResource(product.target.canonical_url, input.targetProductUrl));
+  const extracted = pageProduct && feedTarget ? mergeProduct(pageProduct, feedTarget) : pageProduct ?? feedTarget;
   if (!extracted) throw new Error("target product could not be extracted");
 
   const [sitemap, llms, agentCommerce, ucp] = await Promise.all([
@@ -72,7 +84,8 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
   const discoveredProducts = discovered.documents
     .map((document) => ({ document, product: successful(document) ? extractProduct(document.body, document.url) : null }))
     .filter((entry): entry is { document: FetchedDocument; product: NonNullable<typeof entry.product> } => entry.product !== null);
-  const productsById = new Map([[extracted.target.product_id, extracted]]);
+  const productsById = new Map(feedProducts.map((product) => [product.target.product_id, product]));
+  productsById.set(extracted.target.product_id, extracted);
   for (const entry of discoveredProducts) productsById.set(entry.product.target.product_id, entry.product);
   const products = [...productsById.values()];
 
@@ -97,12 +110,12 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
   });
   const catalogueSnapshot: CatalogueSnapshot = {
     fetched_at: input.fetchedAt,
-    products_total: products.length + discovered.unreadable.length,
+    products_total: products.length + discovered.unreadable.length + feedDiscovery.unreadable.length,
     products_readable: products.length,
-    unreadable: discovered.unreadable,
+    unreadable: [...feedDiscovery.unreadable, ...discovered.unreadable],
     target_field_sources: extracted.fieldSources,
   };
-  const documents = [targetDocument, sitemap, robots, llms, agentCommerce, ucp, ...discovered.documents];
+  const documents = [targetDocument, ...feedDiscovery.documents, sitemap, robots, llms, agentCommerce, ucp, ...discovered.documents];
   const evidence = documents.map((document, index): Evidence => ({
     evidence_id: `ev_fetch_${String(index + 1).padStart(3, "0")}`,
     kind: "fetch",
@@ -130,6 +143,31 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
     availability: extracted.availability,
     evidence,
   };
+}
+
+async function fetchProductFeeds(
+  urls: string[],
+  origin: string,
+  fetcher: DocumentFetcher,
+  signal: AbortSignal | undefined,
+): Promise<{ documents: FetchedDocument[]; unreadable: { url: string; reason: string }[] }> {
+  const sameOriginUrls = urls.filter((url) => sameOrigin(url, origin)).slice(0, 10);
+  const documents: FetchedDocument[] = [];
+  const unreadable: { url: string; reason: string }[] = [];
+  for (const url of sameOriginUrls) {
+    try {
+      const document = await fetcher.get(url, signal);
+      documents.push(document);
+      if (!successful(document)) {
+        unreadable.push({ url, reason: `HTTP ${document.status}` });
+      } else if (parseProductFeed(document.body, document.contentType, document.url).length === 0) {
+        unreadable.push({ url, reason: "product feed could not be parsed" });
+      }
+    } catch (error) {
+      unreadable.push({ url, reason: errorMessage(error) });
+    }
+  }
+  return { documents, unreadable };
 }
 
 function successful(document: FetchedDocument): boolean {
