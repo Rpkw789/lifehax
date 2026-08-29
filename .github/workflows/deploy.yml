@@ -13,6 +13,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Deploy without running the suite (demo emergencies only)"
+        type: boolean
+        default: false
 
 # Never let two deploys of the same service overlap; queue instead of cancel so
 # a superseded commit still finishes rather than leaving Render mid-update.
@@ -21,8 +26,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Nothing reaches Render unverified. Both suites are offline, so this costs
+  # under a minute and is the only thing standing between a bad push and
+  # production — this repo commits straight to main, no PRs.
+  verify:
+    name: test and typecheck
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Backend
+        working-directory: backend
+        run: |
+          bun install --frozen-lockfile
+          bun test
+          bun run typecheck
+
+      # Next and its types come from npm; only the test runner is bun.
+      - name: Frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          bun test
+          npm run typecheck
+
   deploy:
     name: deploy ${{ matrix.name }}
+    needs: verify
+    # `needs` alone would skip deploy when verify is skipped, so state the
+    # condition: run unless something actually failed.
+    if: ${{ always() && !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       # One service failing should not hide the other's result.
