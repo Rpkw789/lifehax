@@ -1,8 +1,22 @@
 {
   "compilerOptions": {
-    "strict": true,
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    // DOM is here for the page.evaluate() callbacks in agents.ts, which are
+    // serialised and run inside the agent's browser, not on the server.
+    "lib": ["ESNext", "DOM"],
     "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
-  }
+  },
+  "include": ["src"]
 }

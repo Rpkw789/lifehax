@@ -111,3 +111,13 @@ export interface RunInput {
   /** Persona indices that are switched off for this run. */
   disabledPersonas: number[];
 }
+
+/** A surface score, computed by the backend from the site audit. */
+export interface Surface {
+  name: string;
+  /** 0-100, as a string for display. */
+  score: string;
+  /** 0..1, for the chevron track fill. */
+  fraction: number;
+  note: string;
+}
