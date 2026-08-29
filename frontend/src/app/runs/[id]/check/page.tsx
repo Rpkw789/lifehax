@@ -33,6 +33,7 @@ export default function CheckScreen() {
     runId,
     storeHost,
     tick,
+    restore,
     running,
     complete,
     error,
@@ -47,13 +48,15 @@ export default function CheckScreen() {
   } = useRun();
   const started = useRef(false);
 
-  // Landing on this URL directly should start the run rather than sit dead.
+  // Landing on this URL directly should start a run rather than sit dead — but
+  // only once the id has been looked up. A URL naming a saved run is a request
+  // to read that run, and starting one here used to POST a fresh run against an
+  // empty store instead of showing it.
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || restore !== "none") return;
     started.current = true;
     if (!running && !complete) startRun();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [restore, running, complete, startRun]);
 
   const settled = agents.filter((a) => a.settled).length;
   const won = agents.filter((a) => a.ok).length;

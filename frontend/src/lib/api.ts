@@ -3,6 +3,7 @@
  */
 
 import type { RunSummary } from "./history";
+import type { SavedRun } from "./hydrate";
 import type {
   AgentEvent,
   Checks,
@@ -85,6 +86,31 @@ export async function savePersonaOverrides(
     } | null;
     throw new Error(body?.error?.message ?? `backend returned ${res.status}`);
   }
+}
+
+/**
+ * One saved run, whole. The stream is the only source for a run in flight, but
+ * a finished one is a document — and `GET /runs/:id` is the only route that
+ * falls back to the database, so it is the only way to read a run that has
+ * outlived the process that produced it.
+ *
+ * Returns null when there is no such run, which is an ordinary answer for a
+ * URL someone typed or a run that has been cleared.
+ */
+export async function getRun(runId: string): Promise<SavedRun | null> {
+  const res = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}`);
+  if (res.status === 404) return null;
+  const body = (await res.json()) as
+    | SavedRun
+    | { error: { code: string; message: string } };
+  if (!res.ok || !("runId" in body)) {
+    // A run carries an `error` field of its own, so the two shapes are told
+    // apart by `runId` rather than by the presence of `error`.
+    throw new Error(
+      "runId" in body ? `backend returned ${res.status}` : body.error.message,
+    );
+  }
+  return body;
 }
 
 export async function createRun(input: RunInput): Promise<string> {

@@ -13,6 +13,7 @@ import { History } from "./History";
 export default function DashboardScreen() {
   const {
     runId,
+    restore,
     agents,
     events,
     surfaces,
@@ -22,6 +23,20 @@ export default function DashboardScreen() {
     complete,
     input,
   } = useRun();
+
+  // Reading a saved run takes a round trip, and "No run yet" is the wrong
+  // thing to say while the answer is still coming.
+  if (restore === "pending") {
+    return (
+      <div className={styles.screen}>
+        <div className={styles.column}>
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>Reading this run…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // The provider seeds a full agent population before anything runs, so an
   // empty `agents` never signals "no run" — an empty event stream does.
