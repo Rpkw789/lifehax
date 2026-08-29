@@ -57,8 +57,8 @@ export function shippingSnippet(): string {
   return [
     '"shippingDetails": {',
     '  "@type": "OfferShippingDetails",',
-    '  "shippingRate": { "@type": "MonetaryAmount", "value": "0.00", "currency": "USD" },',
-    '  "deliveryTime": "1-3 business days"',
+    '  "shippingRate": { "@type": "MonetaryAmount", "value": "<your shipping rate>", "currency": "<your currency>" },',
+    '  "deliveryTime": "<your delivery window>"',
     "}",
   ].join("\n");
 }
@@ -71,7 +71,7 @@ export function llmsTxtSnippet(brand: Brand, audit: SiteAudit): string {
     `- [Product feed](/feeds/products.xml): all ${audit.sitemap.products_total} SKUs, hourly`,
     "",
     "## Policies",
-    "- Returns: 30 days, unused, prepaid label",
-    "- Shipping: 1-3 business days domestic",
+    "- Returns: <your returns policy>",
+    "- Shipping: <your shipping policy>",
   ].join("\n");
 }

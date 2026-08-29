@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../../fixtures";
-import { resolvePath } from "@contracts/validate-findings";
+import { validateFindings } from "@contracts/validate-findings";
 import { protocolLlmsTxtRule, protocolManifestRule } from "./protocol";
 
 const source = loadExampleCheckResult();
@@ -16,10 +16,9 @@ describe("protocol.manifest", () => {
     expect(finding.severity).toBe("critical");
   });
 
-  test("every evidence reference resolves", () => {
-    for (const entry of protocolManifestRule.evaluate(source)!.evidence) {
-      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
-    }
+  test("its output survives contract validation", () => {
+    const draft = protocolManifestRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("returns null when both manifests are present", () => {
@@ -66,10 +65,9 @@ describe("protocol.llms_txt", () => {
     expect(protocolLlmsTxtRule.evaluate(source)!.recommendation.snippet).toContain("Acme");
   });
 
-  test("every evidence reference resolves", () => {
-    for (const entry of protocolLlmsTxtRule.evaluate(source)!.evidence) {
-      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
-    }
+  test("its output survives contract validation", () => {
+    const draft = protocolLlmsTxtRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("returns null when llms.txt was never flagged", () => {

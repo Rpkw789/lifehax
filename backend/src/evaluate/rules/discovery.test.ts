@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../../fixtures";
-import { resolvePath } from "@contracts/validate-findings";
+import { validateFindings } from "@contracts/validate-findings";
 import { discoverySourcesRule } from "./discovery";
 
 const source = loadExampleCheckResult();
@@ -17,14 +17,9 @@ describe("discovery.sources", () => {
     expect(finding.addresses_failure_codes.sort()).toEqual(["NOT_IN_SEARCH_RESULTS", "NOT_IN_SITEMAP"]);
   });
 
-  test("every evidence reference resolves against the source", () => {
-    const finding = discoverySourcesRule.evaluate(source)!;
-    expect(finding.evidence.length).toBeGreaterThan(0);
-    for (const entry of finding.evidence) {
-      for (const ref of entry.references) {
-        expect(resolvePath(source, ref)).toBeDefined();
-      }
-    }
+  test("its output survives contract validation", () => {
+    const draft = discoverySourcesRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("carries a non-empty snippet", () => {

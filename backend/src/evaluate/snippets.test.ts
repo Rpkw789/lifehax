@@ -73,4 +73,12 @@ describe("static snippets", () => {
     expect(manifestSnippet().length).toBeGreaterThan(0);
     expect(shippingSnippet().length).toBeGreaterThan(0);
   });
+
+  test("never fabricates policy claims a brand has not made", () => {
+    expect(shippingSnippet()).not.toContain("0.00");
+    expect(shippingSnippet()).not.toContain("1-3 business days");
+    const guide = llmsTxtSnippet(source.brand, source.site_audit);
+    expect(guide).not.toContain("30 days");
+    expect(guide).not.toContain("prepaid label");
+  });
 });

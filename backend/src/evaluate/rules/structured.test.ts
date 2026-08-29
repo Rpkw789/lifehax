@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../../fixtures";
-import { resolvePath } from "@contracts/validate-findings";
+import { validateFindings } from "@contracts/validate-findings";
 import { structuredOfferRule } from "./structured";
 
 const source = loadExampleCheckResult();
@@ -19,10 +19,9 @@ describe("structured.offer", () => {
     ]);
   });
 
-  test("every evidence reference resolves", () => {
-    for (const entry of structuredOfferRule.evaluate(source)!.evidence) {
-      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
-    }
+  test("its output survives contract validation", () => {
+    const draft = structuredOfferRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("its snippet carries the brand's real price", () => {

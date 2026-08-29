@@ -3,16 +3,13 @@
 import type { CheckResult } from "@contracts/check-result";
 import type { FailureCode } from "@contracts/codes";
 import type { FindingEvidence } from "@contracts/finding";
+import { evidencePerRun, type Probe } from "../evidence";
 import { runIdsReporting, wasReported } from "../helpers";
 import { offerSnippet } from "../snippets";
 import type { DraftFinding, Rule } from "../types";
 
 /** Each structured-data failure, with the sentence and paths that evidence it. */
-const OFFER_PROBES: {
-  code: FailureCode;
-  fact: string;
-  references: (runId: string) => string[];
-}[] = [
+const OFFER_PROBES: Probe[] = [
   {
     code: "PRICE_CLIENT_SIDE_ONLY",
     fact: "The agent read the page and found no price; it is absent from served HTML and appears only after hydration",
@@ -42,21 +39,7 @@ export const structuredOfferRule: Rule = {
 
     const observed = CODES.filter((code) => wasReported(source, code));
 
-    // Each run is evidenced only by the failures it actually reported — citing a
-    // fact a run never observed would overstate the finding.
-    const evidence: FindingEvidence[] = [];
-    for (const run of source.agent_runs) {
-      const probes = OFFER_PROBES.filter((probe) =>
-        (run.outcome?.failure_codes ?? []).some((entry) => entry.code === probe.code),
-      );
-      if (probes.length === 0) continue;
-
-      evidence.push({
-        agent_run_id: run.run_id,
-        fact: probes.map((probe) => probe.fact).join(" "),
-        references: probes.flatMap((probe) => probe.references(run.run_id)),
-      });
-    }
+    const evidence: FindingEvidence[] = evidencePerRun(source, OFFER_PROBES);
 
     if (observed.includes("NO_OFFER_SCHEMA")) {
       evidence.push({

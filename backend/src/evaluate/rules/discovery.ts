@@ -3,11 +3,26 @@
 import type { CheckResult } from "@contracts/check-result";
 import type { FailureCode } from "@contracts/codes";
 import type { FindingEvidence } from "@contracts/finding";
+import { evidencePerRun, type Probe } from "../evidence";
 import { runIdsReporting, wasReported } from "../helpers";
 import { feedSnippet } from "../snippets";
 import type { DraftFinding, Rule } from "../types";
 
-const CODES: FailureCode[] = ["NOT_IN_SITEMAP", "NOT_IN_SEARCH_RESULTS"];
+/** Each discovery failure, with the sentence and paths that evidence it. */
+const DISCOVERY_PROBES: Probe[] = [
+  {
+    code: "NOT_IN_SITEMAP",
+    fact: "The product is absent from the sitemap, so the agent had no machine-readable route to it",
+    references: (runId) => [`agent_runs#${runId}.outcome.target_discovered`],
+  },
+  {
+    code: "NOT_IN_SEARCH_RESULTS",
+    fact: "The domain did not appear in the agent's search results and none of our pages were fetched",
+    references: (runId) => [`agent_runs#${runId}.outcome.our_pages_fetched`],
+  },
+];
+
+const CODES: FailureCode[] = DISCOVERY_PROBES.map((probe) => probe.code);
 
 export const discoverySourcesRule: Rule = {
   id: "discovery.sources",
@@ -18,14 +33,7 @@ export const discoverySourcesRule: Rule = {
 
     const observed = CODES.filter((code) => wasReported(source, code));
 
-    const evidence: FindingEvidence[] = runIds.map((runId) => ({
-      agent_run_id: runId,
-      fact: "The agent never retrieved the product: it fetched none of our pages and the domain was absent from all results",
-      references: [
-        `agent_runs#${runId}.outcome.target_discovered`,
-        `agent_runs#${runId}.outcome.our_pages_fetched`,
-      ],
-    }));
+    const evidence: FindingEvidence[] = evidencePerRun(source, DISCOVERY_PROBES);
 
     const missing = source.site_audit.sitemap.missing_product_ids.length;
     if (missing > 0) {

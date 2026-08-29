@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../../fixtures";
-import { resolvePath } from "@contracts/validate-findings";
+import { validateFindings } from "@contracts/validate-findings";
 import { contentAttributesRule, contentShippingRule } from "./content";
 
 const source = loadExampleCheckResult();
@@ -22,10 +22,9 @@ describe("content.attributes", () => {
     expect(snippet).not.toContain("waterproof");
   });
 
-  test("every evidence reference resolves", () => {
-    for (const entry of contentAttributesRule.evaluate(source)!.evidence) {
-      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
-    }
+  test("its output survives contract validation", () => {
+    const draft = contentAttributesRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("returns null when no attribute was flagged", () => {
@@ -74,10 +73,9 @@ describe("content.shipping", () => {
     expect(finding.addresses_failure_codes).toEqual(["SHIPPING_INFO_NOT_FOUND"]);
   });
 
-  test("every evidence reference resolves", () => {
-    for (const entry of contentShippingRule.evaluate(source)!.evidence) {
-      for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
-    }
+  test("its output survives contract validation", () => {
+    const draft = contentShippingRule.evaluate(source)!;
+    expect(validateFindings([{ ...draft, finding_id: "F001" }], source)).toEqual([]);
   });
 
   test("evidences a run only with the failures it actually reported", () => {

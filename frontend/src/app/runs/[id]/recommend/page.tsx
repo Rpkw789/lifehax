@@ -185,7 +185,7 @@ export default function RecommendScreen() {
                   </span>
                   <span className={styles.findingMeta}>
                     <span className={styles.impact}>
-                      {`+${shoppersAffected(finding)} agents`}
+                      {`+${shoppersAffected(finding)} ${shoppersAffected(finding) === 1 ? "agent" : "agents"}`}
                     </span>
                     <Caret open={open} />
                   </span>
