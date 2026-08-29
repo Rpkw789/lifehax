@@ -74,33 +74,3 @@ input {
   background: var(--border);
   border-radius: 8px;
 }
-
-/* Motion inventory. Durations are load-bearing — see the handoff. */
-@keyframes h2blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@keyframes h2scan {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(1100%);
-  }
-}
-
-@keyframes h2ring {
-  0%,
-  100% {
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}

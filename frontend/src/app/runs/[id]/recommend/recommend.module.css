@@ -1,0 +1,381 @@
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 26px 20px 64px;
+}
+
+.column {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Score header */
+.scoreHeader {
+  display: flex;
+  gap: 26px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 22px 24px;
+  background: var(--soft);
+}
+
+.scoreSide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+}
+
+.scoreValue {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.score {
+  font-family: var(--font-mono);
+  font-size: 52px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.scoreMax {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--faint);
+}
+
+.verdict {
+  font-size: 12.5px;
+  color: var(--secondary);
+}
+
+.summarySide {
+  flex: 1;
+  min-width: 280px;
+}
+
+.summary {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--secondary);
+  text-wrap: pretty;
+}
+
+.summaryActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+/* Surface scores */
+.surfaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.surfaceCard {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px 14px;
+  background: var(--page);
+}
+
+.surfaceTop {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.surfaceName {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.surfaceScore {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.surfaceTrack {
+  margin-top: 10px;
+}
+
+.surfaceNote {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tertiary);
+  margin-top: 9px;
+  line-height: 1.5;
+}
+
+/* Brief × stage matrix */
+.matrixLabel {
+  margin: 28px 0 10px;
+}
+
+.matrix {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--page);
+}
+
+.matrixHead {
+  display: flex;
+  align-items: center;
+  padding: 9px 14px;
+  background: var(--strip);
+  border-bottom: 1px solid var(--divider);
+}
+
+.matrixBriefCell {
+  width: 210px;
+  flex: none;
+}
+
+.matrixHeadCell {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.matrixStages {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.matrixRow {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.matrixBrief {
+  width: 210px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.matrixSwatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.matrixName {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.cell {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.cellBoth {
+  color: var(--ink);
+}
+
+.cellOne {
+  color: var(--tertiary);
+}
+
+.cellNone {
+  color: var(--was);
+}
+
+.matrixFoot {
+  padding: 10px 14px;
+  background: var(--strip);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tertiary);
+}
+
+/* Recommendations */
+.findingsLabel {
+  margin: 30px 0 10px;
+}
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.finding {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--page);
+  overflow: hidden;
+}
+
+.findingHeader {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 15px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.findingHeader:hover {
+  background: var(--soft);
+}
+
+.sev {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.sevCritical {
+  background: var(--ink);
+  color: #fff;
+}
+
+.sevHigh {
+  background: var(--page);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}
+
+.sevMedium {
+  background: var(--strip);
+  border: 1px solid var(--border);
+  color: var(--tertiary);
+}
+
+.findingText {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.findingTitle {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.evidence {
+  font-size: 12.5px;
+  color: var(--tertiary);
+  line-height: 1.5;
+}
+
+.findingMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.impact {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--secondary);
+}
+
+.caret {
+  display: flex;
+  color: var(--muted);
+  transition: transform 200ms ease;
+}
+
+.caretOpen {
+  transform: rotate(180deg);
+}
+
+.findingBody {
+  padding: 0 15px 15px;
+  border-top: 1px solid var(--hairline);
+}
+
+.findingGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding-top: 14px;
+}
+
+.fix {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--secondary);
+  text-wrap: pretty;
+}
+
+.metaPairs {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.metaPair {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.metaKey {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.metaValue {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink);
+}
+
+.snippet {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--secondary);
+  background: var(--ground);
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  padding: 11px 12px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}

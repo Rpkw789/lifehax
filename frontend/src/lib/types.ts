@@ -101,29 +101,6 @@ export interface Finding {
   snippet: string;
 }
 
-/** One generated field, and where its value came from. */
-export interface ProvenanceRow {
-  field: string;
-  value: string;
-  source: string;
-  /** False = no source found; flagged for confirmation rather than asserted. */
-  grounded: boolean;
-}
-
-/** A generated artifact for one delivery channel. */
-export interface Channel {
-  key: string;
-  name: string;
-  sub: string;
-  /** Where the file is installed. */
-  target: string;
-  /** e.g. "Fixes #2, #4" */
-  fixes: string;
-  file: string;
-  code: string;
-  rows: ProvenanceRow[];
-}
-
 /** The input payload a run is created from (`POST /runs`). */
 export interface RunInput {
   storeUrl: string;

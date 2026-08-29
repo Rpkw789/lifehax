@@ -7,7 +7,7 @@
  * match (see `types.ts`).
  */
 
-import type { AgentPlan, Channel, Finding, Persona, StageName } from "./types";
+import type { AgentPlan, Finding, Persona, StageName } from "./types";
 
 /** The six journey stages, in order. */
 export const STAGES: readonly StageName[] = [
@@ -206,9 +206,6 @@ export const SURFACE_SCORES: readonly {
   },
 ];
 
-/** Agents reaching each stage after the fixes are applied, by stage. */
-export const AFTER_COUNTS: readonly number[] = [10, 10, 10, 9, 9, 8];
-
 /** The six findings, ordered by agents unblocked. */
 export const FINDINGS: readonly Finding[] = [
   {
@@ -300,150 +297,5 @@ export const FINDINGS: readonly Finding[] = [
     snippetLabel: "Feed",
     snippet:
       "GET /feeds/products.xml\n  → 40/40 SKUs, updated hourly\nsitemap: include /products/* on publish hook",
-  },
-];
-
-/** The three generated artifacts, with per-field provenance. */
-export const CHANNELS: readonly Channel[] = [
-  {
-    key: "html",
-    name: "Browsing agents",
-    sub: "Enriched HTML + JSON-LD",
-    target: "/products/atlas-lamp",
-    fixes: "Fixes #2, #4",
-    file: "atlas-lamp.snippet.html",
-    code: '<!-- paste before </head> -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Product",\n  "name": "Atlas Desk Lamp",\n  "sku": "ATL-1120",\n  "brand": { "@type": "Brand", "name": "Northwind" },\n  "offers": {\n    "@type": "Offer",\n    "price": "118.00",\n    "priceCurrency": "USD",\n    "availability": "https://schema.org/InStock",\n    "shippingDetails": { "@type": "OfferShippingDetails",\n      "deliveryTime": "1-3 business days" }\n  },\n  "additionalProperty": [\n    { "@type": "PropertyValue", "name": "diameter", "value": "40 mm" },\n    { "@type": "PropertyValue", "name": "finish", "value": "matte black" },\n    { "@type": "PropertyValue", "name": "dimmable", "value": "true" },\n    { "@type": "PropertyValue", "name": "colorTemp", "value": "2700-5000K" }\n  ]\n}\n</script>\n\n<!-- server-rendered facts, was image-only -->\n<dl data-agent="specs">\n  <dt>Diameter</dt><dd>40 mm</dd>\n  <dt>Finish</dt><dd>Matte black</dd>\n  <dt>Dimmable</dt><dd>Yes, 2700-5000K</dd>\n</dl>',
-    rows: [
-      {
-        field: "price",
-        value: "118.00 USD",
-        source: "cart API response",
-        grounded: true,
-      },
-      {
-        field: "availability",
-        value: "InStock",
-        source: "inventory endpoint",
-        grounded: true,
-      },
-      {
-        field: "diameter",
-        value: "40 mm",
-        source: "spec image OCR + PDF",
-        grounded: true,
-      },
-      {
-        field: "finish",
-        value: "matte black",
-        source: "variant name",
-        grounded: true,
-      },
-      {
-        field: "dimmable",
-        value: "true, 2700–5000K",
-        source: "spec sheet p.2",
-        grounded: true,
-      },
-      {
-        field: "energyRating",
-        value: "—",
-        source: "not found in any source",
-        grounded: false,
-      },
-    ],
-  },
-  {
-    key: "feed",
-    name: "Feed for ACP / UCP",
-    sub: "Structured entry per SKU",
-    target: "/feeds/agent-products.json",
-    fixes: "Fixes #1, #5, #6",
-    file: "agent-products.json",
-    code: '{\n  "id": "ATL-1120",\n  "title": "Atlas Desk Lamp",\n  "price": { "amount": 118.00, "currency": "USD" },\n  "availability": "in_stock",\n  "quantity_max": 999,\n  "bulk": { "threshold": 25, "quote_url": "/api/agent/quote" },\n  "attributes": {\n    "diameter_mm": 40,\n    "finish": "matte black",\n    "dimmable": true,\n    "color_temp_k": [2700, 5000]\n  },\n  "ideal_use_cases": [\n    "small desk or nightstand where footprint matters",\n    "late-night work: warm 2700K without waking a room",\n    "housewarming gift under $120"\n  ],\n  "not_suitable_for": [\n    "whole-room lighting",\n    "outdoor or damp locations"\n  ],\n  "checkout": { "guest": true, "intent": "/api/agent/checkout" }\n}',
-    rows: [
-      {
-        field: "ideal_use_cases[0]",
-        value: "small desk / nightstand",
-        source: "dimensions + 41 reviews",
-        grounded: true,
-      },
-      {
-        field: "ideal_use_cases[1]",
-        value: "warm 2700K late-night",
-        source: "spec sheet",
-        grounded: true,
-      },
-      {
-        field: "ideal_use_cases[2]",
-        value: "gift under $120",
-        source: "price + gift-wrap option",
-        grounded: true,
-      },
-      {
-        field: "not_suitable_for",
-        value: "outdoor / damp",
-        source: "IP rating absent → excluded",
-        grounded: true,
-      },
-      {
-        field: "quantity_max",
-        value: "999",
-        source: "needs ops confirmation",
-        grounded: false,
-      },
-      {
-        field: "bulk.threshold",
-        value: "25",
-        source: "no published policy",
-        grounded: false,
-      },
-    ],
-  },
-  {
-    key: "llms",
-    name: "llms.txt",
-    sub: "Curated site guide for models",
-    target: "/llms.txt",
-    fixes: "Fixes #1, #6",
-    file: "llms.txt",
-    code: "# Northwind Supply\n\n> Desk lighting and workspace hardware, shipped from Portland.\n> 40 SKUs. Guest checkout available to verified agents.\n\n## Buying surfaces\n- [Agent manifest](/.well-known/agent-commerce): catalog, search, checkout intents\n- [Product feed](/feeds/agent-products.json): all 40 SKUs, hourly\n- [Quote API](/api/agent/quote): orders above 25 units\n\n## Catalog\n- [Desk lamps](/collections/lamps): 11 SKUs, $78-$240\n- [Monitor arms](/collections/arms): 6 SKUs, $95-$310\n- [Desks](/collections/desks): 9 SKUs, $420-$1,180\n\n## Policies\n- Returns: 30 days, unused, prepaid label\n- Shipping: 1-3 business days domestic\n- Warranty: 2 years on electrical\n\n## Not covered\n- No international shipping\n- No trade/contract pricing published",
-    rows: [
-      {
-        field: "catalog counts",
-        value: "40 SKUs, 3 collections",
-        source: "live sitemap crawl",
-        grounded: true,
-      },
-      {
-        field: "price ranges",
-        value: "per collection",
-        source: "feed min/max",
-        grounded: true,
-      },
-      {
-        field: "returns",
-        value: "30 days prepaid",
-        source: "/policies/returns",
-        grounded: true,
-      },
-      {
-        field: "warranty",
-        value: "2 years electrical",
-        source: "/policies/warranty",
-        grounded: true,
-      },
-      {
-        field: "lead time",
-        value: "1–3 days",
-        source: "checkout estimate",
-        grounded: true,
-      },
-      {
-        field: "trade pricing",
-        value: "declared absent",
-        source: "no source — not asserted",
-        grounded: false,
-      },
-    ],
   },
 ];
