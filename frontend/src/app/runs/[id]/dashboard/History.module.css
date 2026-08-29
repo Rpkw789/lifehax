@@ -46,6 +46,11 @@
   font-size: 13px;
 }
 
+.bar {
+  flex: 1;
+  min-width: 60px;
+}
+
 .count {
   font-variant-numeric: tabular-nums;
   color: var(--ink);

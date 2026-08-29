@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 
-import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
+import { BarList } from "@/vendor/tremor/BarList";
+import { Card } from "@/vendor/tremor/Card";
+import { ProgressBar } from "@/vendor/tremor/ProgressBar";
 import styles from "./dashboard.module.css";
-import { Funnel } from "./Funnel";
 import { History } from "./History";
 
 export default function DashboardScreen() {
@@ -48,39 +49,63 @@ export default function DashboardScreen() {
   const reachedCheckout = agents.filter((a) => a.progress >= 6).length;
   const blocked = settled.filter((a) => a.blocked).length;
 
+  // A funnel is a bar list whose bars only shrink, so BarList carries it
+  // without inventing a chart type Tremor does not have.
+  const funnelBars = steps.map((step) => ({
+    name: step.label,
+    value: step.count,
+  }));
+
+  const tiles = [
+    { value: `${reachedCheckout}/${agents.length}`, label: "Reached checkout" },
+    { value: String(blocked), label: "Blocked before it" },
+    { value: String(catalogueCount), label: "Products read" },
+    { value: String(findings.length), label: "Findings raised" },
+  ];
+
+  const drops = steps.filter((s) => s.lost > 0 && s.reason);
+
   return (
     <div className={styles.screen}>
       <div className={styles.column}>
         <section>
           <SectionLabel>
-            {complete ? "Run results" : running ? "Run in progress" : "Run results"}
+            {running && !complete ? "Run in progress" : "Run results"}
           </SectionLabel>
           <div className={styles.tiles}>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>
-                {reachedCheckout}
-                <span className={styles.tileOf}>/{agents.length}</span>
-              </div>
-              <div className={styles.tileLabel}>Reached checkout</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{blocked}</div>
-              <div className={styles.tileLabel}>Blocked before it</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{catalogueCount}</div>
-              <div className={styles.tileLabel}>Products read</div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.tileValue}>{findings.length}</div>
-              <div className={styles.tileLabel}>Findings raised</div>
-            </div>
+            {tiles.map((tile) => (
+              <Card key={tile.label}>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                  {tile.value}
+                </p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {tile.label}
+                </p>
+              </Card>
+            ))}
           </div>
         </section>
 
         <section>
           <SectionLabel>Where agents dropped out</SectionLabel>
-          <Funnel steps={steps} />
+          <BarList
+            data={funnelBars}
+            sortOrder="none"
+            valueFormatter={(v) => `${v} / ${agents.length}`}
+            className="mt-3"
+          />
+          {drops.length > 0 ? (
+            <ul className={styles.drops}>
+              {drops.map((s) => (
+                <li className={styles.drop} key={s.key}>
+                  <span className={styles.dropCount}>
+                    &minus;{s.lost} at {s.label.toLowerCase()}
+                  </span>
+                  <span className={styles.dropReason}>{s.reason}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
 
         <section>
@@ -91,12 +116,17 @@ export default function DashboardScreen() {
         {surfaces.length > 0 ? (
           <section>
             <SectionLabel>Surface scores</SectionLabel>
-            <div className={styles.bars}>
+            <div className={styles.surfaces}>
               {surfaces.map((surface) => (
-                <div className={styles.bar} key={surface.name}>
-                  <span>{surface.name}</span>
-                  <ChevronTrack count={18} fraction={surface.fraction} fill="var(--ink)" />
-                  <span className={styles.barValue}>{surface.score}</span>
+                <div key={surface.name}>
+                  <div className={styles.surfaceTop}>
+                    <span className={styles.surfaceName}>{surface.name}</span>
+                    <span className={styles.surfaceScore}>{surface.score}</span>
+                  </div>
+                  <ProgressBar value={surface.fraction * 100} className="mt-2" />
+                  {surface.note ? (
+                    <p className={styles.surfaceNote}>{surface.note}</p>
+                  ) : null}
                 </div>
               ))}
             </div>

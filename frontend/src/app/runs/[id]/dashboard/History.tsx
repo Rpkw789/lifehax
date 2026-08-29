@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { ChevronTrack } from "@/components/ChevronTrack";
 import { listRuns } from "@/lib/api";
 import { LineChart } from "@/vendor/tremor/LineChart";
+import { ProgressBar } from "@/vendor/tremor/ProgressBar";
 import { iterationsFor, type Iteration } from "@/lib/history";
 import styles from "./History.module.css";
 
-/** Chevrons in a count track. A run with more than this reads as "many". */
+/** Full-bar value. A run with more than this reads as "many". */
 const SCALE = 12;
 
 /**
@@ -103,11 +103,7 @@ function Metric({
 }) {
   return (
     <span className={styles.metric}>
-      <ChevronTrack
-        count={SCALE}
-        fraction={Math.min(1, value / SCALE)}
-        fill="var(--ink)"
-      />
+      <ProgressBar value={Math.min(100, (value / SCALE) * 100)} className={styles.bar} />
       <span className={styles.count}>
         {value} <span className={styles.unit}>{unit}</span>
       </span>
