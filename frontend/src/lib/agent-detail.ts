@@ -100,6 +100,46 @@ export function outcomeOf(agent: AgentState): Outcome {
   return { headline: `in flight · ${STAGES[agent.progress]}`, tone: "muted" };
 }
 
+export interface Stop {
+  /** The status itself, short enough for a chip: "blocked at cart". */
+  label: string;
+  /** What was observed — the backend's reason, or the state it is still in. */
+  detail: string;
+  tone: "ok" | "fail" | "muted";
+}
+
+/**
+ * The same state `outcomeOf` phrases as one line, split in two.
+ *
+ * The personas screen shows the status and the reason in different places —
+ * a chip beside the agent id and a footnote under its brief — so it needs the
+ * halves rather than the sentence.
+ */
+export function stopOf(agent: AgentState): Stop {
+  if (agent.blocked) {
+    return {
+      label: `blocked at ${STAGES[agent.fail - 1]}`,
+      detail: agent.reason ?? "no reason given",
+      tone: "fail",
+    };
+  }
+  if (agent.ok) {
+    return {
+      label: "checkout reached",
+      detail: "no payment details entered",
+      tone: "ok",
+    };
+  }
+  if (agent.progress === 0) {
+    return { label: "waiting", detail: "no browser session yet", tone: "muted" };
+  }
+  return {
+    label: "in flight",
+    detail: `working through ${STAGES[agent.progress]}`,
+    tone: "muted",
+  };
+}
+
 /** The agents either side of this one, for the prev/next control. */
 export function neighbours(
   ids: readonly string[],

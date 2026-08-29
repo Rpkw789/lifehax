@@ -8,7 +8,7 @@
  */
 
 import { completeJson, llmConfigured, type JsonSchema } from "./llm";
-import type { Catalogue, Persona } from "./types";
+import type { Catalogue, Persona, PersonaOverride } from "./types";
 
 /** Category-agnostic intents. Safe to hardcode: none names a product type. */
 const ARCHETYPES = [
@@ -76,7 +76,54 @@ const PERSONA_SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
-export async function generatePersonas(catalogue: Catalogue): Promise<Briefing> {
+/**
+ * The population for a run: written from the catalogue, then overwritten
+ * wherever this store's owner has edited a brief on the personas screen.
+ *
+ * Overrides are applied outside the generator so both paths through it — the
+ * model and the offline fallback — honour an edit identically. A model outage
+ * must not silently discard what someone typed.
+ */
+export async function generatePersonas(
+  catalogue: Catalogue,
+  overrides: PersonaOverride[] = [],
+): Promise<Briefing> {
+  return applyOverrides(await writeBriefing(catalogue), overrides);
+}
+
+/**
+ * Replaces the named fields, seat by seat, leaving every untouched seat with
+ * the brief the generator wrote for this catalogue. `personas[i].prompt` stays
+ * the first seat's brief, which is the invariant the rest of the app reads.
+ */
+function applyOverrides(
+  briefing: Briefing,
+  overrides: PersonaOverride[],
+): Briefing {
+  if (overrides.length === 0) return briefing;
+
+  const personas = briefing.personas.map((p) => ({ ...p }));
+  const briefs = [...briefing.briefs];
+
+  for (const override of overrides) {
+    const index = personas.findIndex((p) => p.tag === override.tag);
+    if (index === -1) continue;
+
+    const name = override.name?.trim();
+    if (name) personas[index]!.name = name;
+
+    override.briefs?.forEach((brief, seat) => {
+      const text = brief?.trim();
+      if (!text || seat >= PER_ARCHETYPE) return;
+      briefs[index * PER_ARCHETYPE + seat] = text;
+      if (seat === 0) personas[index]!.prompt = text;
+    });
+  }
+
+  return { personas, briefs };
+}
+
+async function writeBriefing(catalogue: Catalogue): Promise<Briefing> {
   if (!llmConfigured() || catalogue.products.length === 0) {
     return fallbackBriefing(catalogue);
   }
