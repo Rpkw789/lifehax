@@ -1,0 +1,106 @@
+/* Neutrals from the handoff's token table. No shadows anywhere — depth is
+   borders and ground tints only. */
+:root {
+  --ink: #101012;
+  --ink-hover: #2c2c31;
+  --secondary: #3f3f47;
+  --tertiary: #6b6b73;
+  --blocked: #8a8a92;
+  --muted: #9a9aa2;
+  --faint: #b4b4ba;
+  --was: #c9c9cf;
+  --border-strong: #d3d3d8;
+  --border: #e3e3e6;
+  --chevron-off: #e6e6e9;
+  --divider: #ececee;
+  --hairline: #f2f2f3;
+  --strip: #fafafa;
+  --ground: #fbfbfc;
+  --soft: #fcfcfd;
+  --stepper-row: #fdfdfe;
+  --page: #ffffff;
+
+  --nav-active: #f0f0f1;
+  --nav-hover: #f4f4f5;
+  --stepper-active-border: #d7d7db;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--page);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--secondary);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--ink);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+/* Motion inventory. Durations are load-bearing — see the handoff. */
+@keyframes h2blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes h2scan {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(1100%);
+  }
+}
+
+@keyframes h2ring {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

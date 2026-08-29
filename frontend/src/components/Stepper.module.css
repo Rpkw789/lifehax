@@ -1,0 +1,49 @@
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--stepper-row);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.groupActive {
+  background: var(--strip);
+  border-color: var(--stepper-active-border);
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.labelActive {
+  color: var(--ink);
+}
+
+.labelDone {
+  color: var(--tertiary);
+}
+
+.note {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}

@@ -1,0 +1,13 @@
+.track {
+  display: flex;
+  gap: 2px;
+}
+
+.chevron {
+  width: 7px;
+  height: 12px;
+  flex: none;
+  display: block;
+  clip-path: polygon(0 0, 52% 0, 100% 50%, 52% 100%, 0 100%);
+  transition: background 420ms ease;
+}
