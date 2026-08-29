@@ -35,6 +35,7 @@ test("runs all three methods with the same target and brief and monotonic events
   expect(contexts).toHaveLength(3);
   expect(contexts.every((context) => context.target === contexts[0]?.target)).toBe(true);
   expect(contexts.every((context) => context.brief === contexts[0]?.brief)).toBe(true);
+  expect(contexts.every((context) => context.storeUrl === "https://example.com/")).toBe(true);
   expect(events).toEqual([0, 1, 2, 3, 4, 5]);
   expect(report.evaluation_config.queries[0]?.text).toBe("Find a well-documented option");
 });
@@ -87,7 +88,7 @@ function inputFixture() {
     runId: "run_surface",
     reportId: "report_surface",
     generatedAt: "2026-08-29T10:25:03.114Z",
-    storeUrl: "https://example.com",
+    storeUrl: "example.com",
     testSkus: "primary",
     disabledPersonas: [],
     catalogue: { domain: "example.com", origin: "https://example.com", entryUrl: "https://example.com/", hasPath: false, products: [{ url: "https://example.com/items/primary", title: "Primary item", price: "20", attributes: {} }], source: "sitemap" as const, sitemapProductCount: 1 },

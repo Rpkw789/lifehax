@@ -65,7 +65,7 @@ export async function runSurfaceSimulations(
   const brief = selectBrief(input.briefs, input.personas, input.disabledPersonas);
   const context: SurfaceWorkerContext = {
     runId: input.runId,
-    storeUrl: input.storeUrl,
+    storeUrl: input.catalogue.entryUrl,
     target,
     brief: brief.query,
     at: input.generatedAt,
