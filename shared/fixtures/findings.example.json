@@ -1,0 +1,163 @@
+[
+  {
+    "finding_id": "F001",
+    "severity": "critical",
+    "title": "No agent-commerce manifest exists on either protocol",
+    "evidence": [
+      {
+        "agent_run_id": "ar_001",
+        "fact": "/.well-known/agent-commerce returned 404, so the agent fell back to reading the storefront by pixels",
+        "references": ["site_audit.agent_commerce", "agent_runs#ar_001.outcome.failure_codes"]
+      },
+      {
+        "agent_run_id": "ar_004",
+        "fact": "/.well-known/ucp returned 404 during the protocol_check stage",
+        "references": ["site_audit.ucp", "agent_runs#ar_004.journey.stages[2]"]
+      }
+    ],
+    "derived_from": ["ar_001", "ar_004"],
+    "addresses_failure_codes": ["ACP_UNSUPPORTED", "UCP_UNSUPPORTED"],
+    "recommendation": {
+      "action": "Publish a manifest describing your catalog, search and checkout intents so agents can skip the UI entirely",
+      "surface": "agent_protocol",
+      "effort": "high",
+      "owner": "platform",
+      "snippet_label": "/.well-known/agent-commerce",
+      "snippet": "{\n  \"version\": \"0.2\",\n  \"catalog\": \"/api/agent/catalog\",\n  \"search\": \"/api/agent/search\",\n  \"checkout\": { \"intent\": \"/api/agent/checkout\", \"guest\": true },\n  \"payment\": [\"card_token\", \"delegated_mandate\"]\n}"
+    }
+  },
+  {
+    "finding_id": "F002",
+    "severity": "high",
+    "title": "Product attributes are claimed in prose but carry no structured value",
+    "evidence": [
+      {
+        "agent_run_id": "ar_001",
+        "fact": "Agent recommended the product at rank 2 but flagged the waterproof claim as unevidenced",
+        "references": ["agent_runs#ar_001.outcome.failure_codes", "agent_runs#ar_001.ranked_candidates[1].reason_codes"]
+      },
+      {
+        "agent_run_id": "ar_005",
+        "fact": "Competitor ranked first on a clear structured attribute claim the target lacks",
+        "references": ["agent_runs#ar_005.ranked_candidates[0].reason_codes", "catalogue_snapshot.target_field_sources"]
+      }
+    ],
+    "derived_from": ["ar_001", "ar_005"],
+    "addresses_failure_codes": ["MISSING_ATTRIBUTE_EVIDENCE"],
+    "recommendation": {
+      "action": "Emit one additionalProperty per attribute a buyer would filter on, server-side",
+      "surface": "structured_data",
+      "effort": "low",
+      "owner": "web",
+      "snippet_label": "Product JSON-LD",
+      "snippet": "\"additionalProperty\": [\n  { \"@type\": \"PropertyValue\", \"name\": \"waterproof\", \"value\": \"true\" },\n  { \"@type\": \"PropertyValue\", \"name\": \"weight_g\", \"value\": \"268\" },\n  { \"@type\": \"PropertyValue\", \"name\": \"rock_plate\", \"value\": \"true\" }\n]"
+    }
+  },
+  {
+    "finding_id": "F003",
+    "severity": "critical",
+    "title": "Target product is absent from machine-readable discovery sources",
+    "evidence": [
+      {
+        "agent_run_id": "ar_003",
+        "fact": "The agent never retrieved the product: it fetched none of our pages and the domain was absent from all results",
+        "references": [
+          "agent_runs#ar_003.outcome.target_discovered",
+          "agent_runs#ar_003.outcome.our_pages_fetched"
+        ]
+      },
+      {
+        "agent_run_id": null,
+        "fact": "12 of 40 products are missing from sitemap.xml, including the target SKU",
+        "references": ["site_audit.sitemap.missing_product_ids", "site_audit.sitemap.products_listed"]
+      }
+    ],
+    "derived_from": ["ar_003"],
+    "addresses_failure_codes": ["NOT_IN_SITEMAP", "NOT_IN_SEARCH_RESULTS"],
+    "recommendation": {
+      "action": "Regenerate the sitemap from the live catalog on publish and serve a machine-readable product feed at a stable URL",
+      "surface": "discoverability",
+      "effort": "low",
+      "owner": "seo",
+      "snippet_label": "Feed",
+      "snippet": "GET /feeds/products.xml\n  -> 40/40 SKUs, updated hourly\nsitemap: include /products/* on publish hook"
+    }
+  },
+  {
+    "finding_id": "F004",
+    "severity": "high",
+    "title": "Price is injected client-side and no Offer schema is served",
+    "evidence": [
+      {
+        "agent_run_id": "ar_005",
+        "fact": "The agent read the page and found no price; it is absent from served HTML and appears only after hydration",
+        "references": [
+          "agent_runs#ar_005.observations.price_found",
+          "site_audit.client_side_price_product_ids"
+        ]
+      },
+      {
+        "agent_run_id": null,
+        "fact": "Only 12 of 40 products carry Offer data; the target is not among them",
+        "references": ["site_audit.structured_data.missing_offer_product_ids"]
+      }
+    ],
+    "derived_from": ["ar_005"],
+    "addresses_failure_codes": ["PRICE_CLIENT_SIDE_ONLY", "NO_OFFER_SCHEMA"],
+    "recommendation": {
+      "action": "Render price and availability into the initial HTML and emit a Product + Offer block server-side",
+      "surface": "structured_data",
+      "effort": "medium",
+      "owner": "web",
+      "snippet_label": "Offer block",
+      "snippet": "\"offers\": {\n  \"@type\": \"Offer\",\n  \"price\": \"129.99\",\n  \"priceCurrency\": \"USD\",\n  \"availability\": \"https://schema.org/InStock\"\n}"
+    }
+  },
+  {
+    "finding_id": "F005",
+    "severity": "medium",
+    "title": "Shipping terms are absent from the product page",
+    "evidence": [
+      {
+        "agent_run_id": "ar_002",
+        "fact": "A shipping-sensitive agent dropped the product and chose a competitor that states free shipping inline",
+        "references": [
+          "agent_runs#ar_002.observations.shipping_information_found",
+          "agent_runs#ar_002.ranked_candidates[0].reason_codes"
+        ]
+      }
+    ],
+    "derived_from": ["ar_002"],
+    "addresses_failure_codes": ["SHIPPING_INFO_NOT_FOUND", "OUTRANKED_BY_COMPETITOR"],
+    "recommendation": {
+      "action": "State shipping cost and delivery window as structured data on the offer, not only at checkout",
+      "surface": "content_quality",
+      "effort": "low",
+      "owner": "content",
+      "snippet_label": "Shipping details",
+      "snippet": "\"shippingDetails\": {\n  \"@type\": \"OfferShippingDetails\",\n  \"shippingRate\": { \"@type\": \"MonetaryAmount\", \"value\": \"0.00\", \"currency\": \"USD\" },\n  \"deliveryTime\": \"1-3 business days\"\n}"
+    }
+  },
+  {
+    "finding_id": "F006",
+    "severity": "medium",
+    "title": "No llms.txt to guide models around the catalog",
+    "evidence": [
+      {
+        "agent_run_id": "ar_004",
+        "fact": "/llms.txt returned 404; the agent had no curated entry point and crawled blind",
+        "references": ["site_audit.llms_txt", "agent_runs#ar_004.outcome.failure_codes"]
+      }
+    ],
+    "derived_from": ["ar_004"],
+    "addresses_failure_codes": ["NO_LLMS_TXT"],
+    "recommendation": {
+      "action": "Publish a curated site guide naming your buying surfaces, catalog structure and policies",
+      "surface": "discoverability",
+      "effort": "low",
+      "owner": "content",
+      "snippet_label": "llms.txt",
+      "snippet": "# Acme\n\n> Trail and road running footwear.\n\n## Buying surfaces\n- [Product feed](/feeds/products.xml): all 40 SKUs, hourly\n\n## Policies\n- Returns: 30 days, unused, prepaid label\n- Shipping: 1-3 business days domestic"
+    }
+  }
+]

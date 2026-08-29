@@ -45,12 +45,10 @@ timeline.
       CheckResult ──────┬──────────────▶ dashboard / analytics
                         │
                         ▼
-                    Evaluate  →  Finding[]
+                    Evaluate  →  Finding[]  (each carries a snippet)
                         │
-                        ▼
-                    Create  →  /hosted/:brandId/*
-                        │
-                        └──────▶ next Check run reads them
+                        └──────▶ brand applies it, re-runs Check
+                                 new report cites the old as baseline
 ```
 
 ## Backend modules
@@ -64,12 +62,10 @@ backend/src/
     runs.ts               POST /runs, GET /runs/:id
     events.ts             GET /runs/:id/events (SSE, Last-Event-ID replay)
     evaluate.ts           POST /runs/:id/evaluate
-    create.ts             POST /runs/:id/create
-    hosted.ts             GET /hosted/:brandId/*
     errors.ts             JSON error shape
 
   runs/
-    store.ts              bun:sqlite — runs, personas, shoppers, events, artifacts
+    store.ts              bun:sqlite — runs, personas, shoppers, events, findings
     queue.ts              in-process job queue, concurrency cap
     bus.ts                per-run event fan-out to SSE subscribers
     orchestrator.ts       snapshot → personas → fan-out → assemble CheckResult
@@ -98,14 +94,8 @@ backend/src/
 
   evaluate/
     rules.ts              observation → candidate findings
-    rank.ts               order by shoppers unblocked
-    validate.ts           rejects a Finding with empty derivedFrom
-
-  create/
-    llms-txt.ts
-    agent-feed.ts
-    json-ld.ts
-    publish.ts            writes artifacts, returns hosted URLs
+    rank.ts               order by runs unblocked
+    snippets.ts           the pasteable fix carried by each finding
 
   demo/
     replay.ts             DEMO_MODE — replays a recorded run through the bus
@@ -123,8 +113,8 @@ interface ShopperAgent {
 }
 ```
 
-`RunContext` carries the brand domain, target products, hosted source URLs, an
-abort signal, and the credentials for this run — held in memory, never persisted.
+`RunContext` carries the brand domain, target product, an abort signal, and the
+credentials for this run — held in memory, never persisted.
 
 ## Live feed
 
@@ -147,7 +137,7 @@ component stay as they are.
 ## Persistence
 
 `bun:sqlite`, one file. Tables: `runs`, `personas`, `shoppers`, `events`,
-`findings`, `artifacts`. Events are append-only with the per-run sequence number
+`findings`. Events are append-only with the per-run sequence number
 `t` as the ordering key, which is what makes SSE reconnect lossless and
 `DEMO_MODE` replay possible.
 

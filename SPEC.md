@@ -34,19 +34,17 @@ it and produces ranked findings, each citing the specific agents that failed and
 the specific reason — no `llms.txt`, product absent from the sitemap, no
 structured Offer data, no ACP/UCP manifest, price only rendered client-side.
 
-**3 · Create.** For each finding, a targeted artifact: `llms.txt`, an agent
-product feed, JSON-LD blocks. Published to a Happy2-hosted URL so the brand needs
-no site access to adopt them.
-
-**4 · Re-run.** Check runs again with the hosted artifacts reachable by the
-agents. The score moves for a real reason. The loop verifies itself.
+**3 · Re-run.** Each finding ships with a pasteable snippet. The brand applies
+it and runs Check again; the new report cites the previous one as its baseline
+and the codes the fix addressed should stop appearing. The loop verifies itself
+against the same measurement that produced the diagnosis.
 
 ## Why this is different
 
 Content generators produce plausible copy against no measurement. Audit tools
-produce a checklist against no verification. Happy2's Create is aimed at the
-specific failures Check observed, and the fix is proven by re-running the same
-measurement. Evidence in, evidence out.
+produce a checklist against no verification. Every Happy2 finding names the
+agent runs that produced it and the failure codes it addresses, and the fix is
+proven by re-running the same measurement. Evidence in, evidence out.
 
 ## Scoring
 
@@ -71,9 +69,9 @@ decides the verdict.
 - **Generalisability.** No product category appears in code. Personas are
   generated per catalogue from category-agnostic intent archetypes. Soap and
   running shoes take the same path.
-- **Adoptability.** The MVP requires no site access. Artifacts are hosted and
-  copyable. The roadmap reduces friction further: an install-once snippet, synced
-  feeds, then platform plugins.
+- **Adoptability.** Every finding carries a pasteable snippet, so adopting a fix
+  is a copy rather than a project. The roadmap reduces friction further: hosted
+  artifacts, an install-once snippet, then platform plugins.
 - **Demo reliability.** Live agent runs are graded live. `DEMO_MODE` replays a
   recorded real run through the same pipeline and renderer when the network is
   hostile.
@@ -90,12 +88,13 @@ decides the verdict.
 1. A run completes end to end for a store the team has never seen, in a category
    nobody wrote code for.
 2. The findings on Recommend cite specific shopper IDs and observed facts.
-3. Applying Create's artifacts and re-running moves the hit rate measurably.
+3. Applying a finding's snippet and re-running moves the hit rate measurably.
 4. The live feed shows real agent activity, not a scripted animation.
-5. A brand can adopt at least one artifact without touching their site.
+5. A brand can adopt at least one fix by pasting a snippet.
 
 ## Not in the MVP
 
-On-site transaction probing beyond the fetch-based audit; Shopify and WooCommerce
-plugins; the install-once JS snippet; multi-tenant auth and billing; any
-headless-browser automation.
+A Create stage that generates and hosts artifacts (dropped 2026-08-29 — findings
+carry snippets instead); on-site transaction probing beyond the fetch-based
+audit; Shopify and WooCommerce plugins; the install-once JS snippet; multi-tenant
+auth and billing; any headless-browser automation.

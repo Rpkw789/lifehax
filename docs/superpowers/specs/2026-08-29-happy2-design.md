@@ -192,3 +192,23 @@ downstream of Check.
 - Shopify/WooCommerce plugins and the install-once JS snippet
 - Multi-tenant auth, billing, and account management
 - Any headless-browser automation
+
+## Change log
+
+**2026-08-29 — D6 superseded.** The Create stage was dropped and its route
+deleted (`68228aa`). Findings now carry a pasteable `snippet` instead of
+generating and hosting artifacts, and the Recommend screen renders it. The loop
+still closes: the brand applies a snippet, re-runs Check, and the new report
+cites the previous one via `baseline_report_id` — the failure codes a finding
+declared in `addresses_failure_codes` should stop appearing.
+
+What this costs: the zero-site-access adoption path that answered rubric 5.
+Adopting a fix is now a paste rather than a redirect. Hosted artifacts move to
+the roadmap; `hosted_sources` stays in the contract, empty, so restoring them is
+additive rather than a schema change.
+
+**2026-08-29 — Finding contract standardised.** `Finding` moved to
+`shared/contracts/finding.ts` in snake_case, with structured `evidence`,
+resolvable `references`, and `addresses_failure_codes` linking each finding to
+the observed codes it fixes. Derived values (`priority`, `shoppers_affected`)
+are computed rather than stored.

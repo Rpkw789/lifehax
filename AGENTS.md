@@ -94,8 +94,8 @@ plaintext, a log line, an `AgentEvent`, or an error message.
 
 ## Testing
 
-TDD for deterministic units: matching, scoring, site-audit extractors, artifact
-generation. Agent runs are tested against recorded responses. CI makes no network
+TDD for deterministic units: matching, scoring, site-audit extractors, findings
+derivation. Agent runs are tested against recorded responses. CI makes no network
 calls. If a test needs the internet, it is the wrong test.
 
 ## Before you claim something works

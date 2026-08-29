@@ -29,7 +29,7 @@ evaluation_config   locale, channels, and the generated queries
 agent_runs[]        one per query — the journey, outcome, ranked candidates
 evidence[]          everything the runs cite by evidence_id
 scores              aggregates derived from agent_runs
-hosted_sources      Create artifacts reachable this run (empty on a first run)
+hosted_sources      reserved; always empty since Create was dropped
 baseline_report_id  the run this one is compared against, if any
 ```
 
@@ -106,16 +106,43 @@ against different schemas and find out during the demo.
 
 ## Evaluate's output: `Finding`
 
-Evaluate consumes `CheckResult` and emits `Finding[]`. The shape lives in
-`frontend/src/lib/types.ts` and moves into `shared/contracts/` with one addition:
+Defined in `shared/contracts/finding.ts`, validated by
+`shared/contracts/validate-findings.ts`, exemplified by
+`shared/fixtures/findings.example.json`.
 
-```ts
-/** Evidence ids and agent_run ids this finding was derived from. Non-empty. */
-derived_from: string[];
+```
+finding_id, severity, title
+evidence[]                 { agent_run_id, fact, references[] }
+derived_from[]             agent_run_ids this finding is about
+addresses_failure_codes[]  which observed codes this fixes
+recommendation             { action, surface, effort, owner, snippet_label, snippet }
 ```
 
-This is the machine-checkable form of the evidence rule. A finding with an empty
-`derived_from` is generic advice, fails validation, and must not be emitted.
+Three things carry the weight:
+
+**`references` are resolved, not decorative.** Each is a path into the
+`CheckResult` — `site_audit.sitemap.missing_product_ids`,
+`agent_runs#ar_003.outcome.our_pages_fetched`. The validator walks every one and
+rejects any that does not resolve. `#id` looks an array element up by its `*_id`
+field, so nobody hardcodes an index that shifts when a run is added.
+
+**`addresses_failure_codes` closes the loop.** A finding must name codes that
+were actually observed, and — when `derived_from` is non-empty — observed in
+those specific runs. This is what makes impact computable, and it is how a
+re-run verifies a fix: those codes should stop appearing.
+
+**Derived values are never stored.** `priority` is array order;
+`shoppers_affected` is `derived_from.length`. The validator rejects a finding
+that stores either, because a stored copy of a derived value drifts from it.
+
+`derived_from` may be empty only when every reference is store-level
+(`site_audit` / `catalogue_snapshot`). Otherwise an empty `derived_from` is
+generic advice wearing a finding's clothes, and is rejected.
+
+Verified: the fixture validates clean against the example `CheckResult`, and ten
+representative drifts are rejected — a dangling path, an unknown run id, a code
+never observed, a code observed in a different run than the one cited, stored
+derived values, empty evidence, and a missing snippet.
 
 ## HTTP surface
 
@@ -125,8 +152,6 @@ This is the machine-checkable form of the evidence rule. A finding with an empty
 | `GET` | `/runs/:id` | The run resource, including `CheckResult` when complete |
 | `GET` | `/runs/:id/events` | SSE live feed; supports `Last-Event-ID` |
 | `POST` | `/runs/:id/evaluate` | Produce `Finding[]` from the run's `CheckResult` |
-| `POST` | `/runs/:id/create` | Generate artifacts; returns hosted URLs |
-| `GET` | `/hosted/:brandId/*` | Serve generated artifacts to agents and brands |
 | `GET` | `/health` | Liveness |
 
 Errors are `{ "error": { "code", "message" } }` with the class carried by the
