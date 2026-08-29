@@ -81,7 +81,7 @@ backend/src/
 
   agents/
     types.ts              ShopperAgent interface, RunContext
-    shared-search.ts      search API + model
+    shared-search.ts      Cloudflare AI Gateway + Anthropic web_search
     native-search.ts      claude-opus-5 with hosted web_search
     match.ts              deterministic URL matching → hit, rank, competitors
 

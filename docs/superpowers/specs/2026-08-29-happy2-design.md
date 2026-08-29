@@ -49,14 +49,21 @@ interface ShopperAgent {
 }
 ```
 
-- `SharedSearchAgent` — we call a search API, feed results to a model that ranks
-  and recommends. Always available; works with cheap or free models. This is the
-  default tier.
+- `SharedSearchAgent` — a server-held Cloudflare AI Gateway token calls
+  Anthropic Opus 4.8 with hosted web search. This is the default tier and does
+  not require a brand-supplied model key.
 - `NativeSearchAgent` — `claude-opus-5` with the provider-hosted `web_search`
   tool, so retrieval is the model's own. Unlocked when the brand supplies a key.
 
 Both stream the same `AgentEvent` type, so the live feed, persistence, and
 scoring are implementation-agnostic.
+
+Each shopper uses two streamed requests: the first runs hosted web search and
+collects citations. Same-origin cited pages are fetched through the guarded
+store fetcher, then the second request turns that evidence into the
+schema-constrained recommendation list. Anthropic citations and structured
+outputs cannot be requested together, and deterministic matching accepts only
+candidate URLs backed by citations from the first request.
 
 ### D3 — Personas are generated, never hardcoded
 
@@ -212,3 +219,11 @@ additive rather than a schema change.
 resolvable `references`, and `addresses_failure_codes` linking each finding to
 the observed codes it fixes. Derived values (`priority`, `shoppers_affected`)
 are computed rather than stored.
+
+**2026-08-29 — D2 shared-search transport revised.** The default agent now uses
+Cloudflare AI Gateway's Anthropic web-search endpoint rather than a separate
+search-results API followed by a model call. Cloudflare currently lists Opus
+4.8 for this endpoint, so the shared tier is the narrow exception to the
+repository's `claude-opus-5` default. The BYOK native tier remains direct
+Anthropic `claude-opus-5`. Both produce the same internal proposal and event
+types, and matching/scoring remain deterministic and provider-independent.
