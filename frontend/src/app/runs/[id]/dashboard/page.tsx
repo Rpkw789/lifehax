@@ -5,9 +5,8 @@ import Link from "next/link";
 import { SectionLabel } from "@/components/SectionLabel";
 import { funnelFromAgents } from "@/lib/funnel";
 import { useRun } from "@/lib/run-context";
-import { BarList } from "@/vendor/tremor/BarList";
-import { Card } from "@/vendor/tremor/Card";
 import { ProgressBar } from "@/vendor/tremor/ProgressBar";
+import { Attrition } from "./Attrition";
 import styles from "./dashboard.module.css";
 import { History } from "./History";
 
@@ -45,73 +44,23 @@ export default function DashboardScreen() {
   }
 
   const steps = funnelFromAgents(agents);
-  const settled = agents.filter((a) => a.settled);
-  const reachedCheckout = agents.filter((a) => a.progress >= 6).length;
-  const blocked = settled.filter((a) => a.blocked).length;
-
-  // A funnel is a bar list whose bars only shrink, so BarList carries it
-  // without inventing a chart type Tremor does not have.
-  const funnelBars = steps.map((step) => ({
-    name: step.label,
-    value: step.count,
-  }));
-
-  const tiles = [
-    { value: `${reachedCheckout}/${agents.length}`, label: "Reached checkout" },
-    { value: String(blocked), label: "Blocked before it" },
-    { value: String(catalogueCount), label: "Products read" },
-    { value: String(findings.length), label: "Findings raised" },
-  ];
-
-  const drops = steps.filter((s) => s.lost > 0 && s.reason);
 
   return (
     <div className={styles.screen}>
       <div className={styles.column}>
-        <section>
-          <SectionLabel>
-            {running && !complete ? "Run in progress" : "Run results"}
-          </SectionLabel>
-          <div className={styles.tiles}>
-            {tiles.map((tile) => (
-              <Card key={tile.label}>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-                  {tile.value}
-                </p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {tile.label}
-                </p>
-              </Card>
-            ))}
-          </div>
+        {/* The hero: where shoppers are lost. Everything else is context. */}
+        <section className={styles.hero}>
+          <Attrition steps={steps} total={agents.length} />
         </section>
 
-        <section>
-          <SectionLabel>Where agents dropped out</SectionLabel>
-          <BarList
-            data={funnelBars}
-            sortOrder="none"
-            valueFormatter={(v) => `${v} / ${agents.length}`}
-            className="mt-3"
-          />
-          {drops.length > 0 ? (
-            <ul className={styles.drops}>
-              {drops.map((s) => (
-                <li className={styles.drop} key={s.key}>
-                  <span className={styles.dropCount}>
-                    &minus;{s.lost} at {s.label.toLowerCase()}
-                  </span>
-                  <span className={styles.dropReason}>{s.reason}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-
-        <section>
-          <SectionLabel>Past runs for this store</SectionLabel>
-          <History storeUrl={input.storeUrl} />
-        </section>
+        {/* One line of context, rather than four tiles competing with the hero. */}
+        <p className={styles.context}>
+          {catalogueCount} products read
+          <span className={styles.sep}>·</span>
+          {findings.length} {findings.length === 1 ? "finding" : "findings"} raised
+          <span className={styles.sep}>·</span>
+          {running && !complete ? "run in progress" : "run complete"}
+        </p>
 
         {surfaces.length > 0 ? (
           <section>
@@ -132,6 +81,11 @@ export default function DashboardScreen() {
             </div>
           </section>
         ) : null}
+
+        <section>
+          <SectionLabel>Past runs for this store</SectionLabel>
+          <History storeUrl={input.storeUrl} />
+        </section>
       </div>
     </div>
   );

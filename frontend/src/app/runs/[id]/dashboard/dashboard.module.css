@@ -1,7 +1,21 @@
-.screen { padding: 32px 40px 80px; }
-.column { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+/* The hero carries the page; the sections under it stay deliberately quiet. */
+.hero {
+  padding-bottom: 4px;
+}
 
-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.context {
+  font-size: 12px;
+  color: var(--tertiary);
+  margin: -16px 0 0;
+}
+
+.sep {
+  color: var(--faint);
+  padding: 0 8px;
+}
+
+.screen { padding: 40px 40px 96px; }
+.column { max-width: 940px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
 
 
 
@@ -37,35 +51,6 @@
 }
 
 /* Drop reasons under the funnel: BarList shows the counts, these say why. */
-.drops {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.drop {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  border-left: 1px solid var(--divider);
-  padding-left: 12px;
-}
-
-.dropCount {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blocked);
-  white-space: nowrap;
-}
-
-.dropReason {
-  font-size: 12px;
-  color: var(--tertiary);
-}
-
 .surfaces {
   display: flex;
   flex-direction: column;
