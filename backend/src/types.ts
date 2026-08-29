@@ -164,4 +164,10 @@ export interface Run {
    * only valid while the session runs — Browserbase returns 410 once it stops.
    */
   sessions: Record<string, { sessionId: string; liveViewUrl: string | null }>;
+  /**
+   * Set once the browsers are closed. A live view URL outlives its session and
+   * renders Browserbase's "debugging connection was closed" page, so consumers
+   * must stop showing them at this point rather than waiting for the run to end.
+   */
+  sessionsClosed: boolean;
 }

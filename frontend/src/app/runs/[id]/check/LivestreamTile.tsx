@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RING_REGIONS, STAGES, STAGE_ACTIONS, STAGE_PATHS } from "@/lib/fixtures";
 import { logText } from "@/lib/simulation";
 import type { AgentEvent, AgentState } from "@/lib/types";
 import motion from "@/styles/motion.module.css";
 import styles from "./LivestreamTile.module.css";
+import { ChevronTrack } from "@/components/ChevronTrack";
 import { PageSkeleton } from "./PageSkeleton";
 
 /**
@@ -26,6 +27,7 @@ export function LivestreamTile({
   events,
   storeHost,
   liveViewUrl,
+  booting,
 }: {
   agent: AgentState;
   /** Every event so far for this agent, oldest first. */
@@ -33,6 +35,8 @@ export function LivestreamTile({
   storeHost: string;
   /** Browserbase live view, present only for agents really driving a browser. */
   liveViewUrl?: string;
+  /** The run is live and this agent has not reported anything yet. */
+  booting: boolean;
 }) {
   // Per-agent capture first, then the shared one, then the skeleton.
   const sources = [`/tiles/${agent.id}.mp4`, "/tiles/fallback.mp4"];
@@ -51,6 +55,7 @@ export function LivestreamTile({
     ? STAGE_PATHS[Math.max(0, agent.fail - 1)]
     : STAGE_PATHS[stageIndex];
 
+  const bootCaption = "provisioning a browser session";
   const caption = agent.blocked
     ? `halted — ${agent.reason}`
     : agent.ok
@@ -74,7 +79,9 @@ export function LivestreamTile({
                 : ""
           }`}
         >
-          {agent.blocked
+          {booting && !showLiveView
+            ? "starting"
+            : agent.blocked
             ? "blocked"
             : agent.ok
               ? "done"
@@ -97,7 +104,9 @@ export function LivestreamTile({
       </div>
 
       <div className={styles.viewport}>
-        {showLiveView ? (
+        {booting && !showLiveView ? (
+          <BootState color={color} agentId={agent.id} />
+        ) : showLiveView ? (
           <iframe
             className={styles.feed}
             src={liveViewUrl}
@@ -159,7 +168,9 @@ export function LivestreamTile({
           }}
         />
 
-        <div className={styles.caption}>{caption}</div>
+        <div className={styles.caption}>
+          {booting && !showLiveView ? bootCaption : caption}
+        </div>
       </div>
 
       <div className={styles.logs}>
@@ -181,6 +192,64 @@ export function LivestreamTile({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** The phases a session goes through before the agent can drive it. */
+const BOOT_PHASES = [
+  "requesting session",
+  "allocating browser",
+  "attaching agent",
+  "opening storefront",
+];
+
+/**
+ * Shown while a real agent's browser is being provisioned — roughly five
+ * seconds, which is long enough that an empty box looks broken.
+ *
+ * The track is the same chevron motif the rest of the product uses, filled in
+ * the brief's color, so this reads as part of the system rather than a spinner
+ * borrowed from somewhere else.
+ */
+function BootState({ color, agentId }: { color: string; agentId: string }) {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setPhase((p) => (p + 1) % BOOT_PHASES.length),
+      1100,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  // The track fills across the phases, then starts over with the cycle.
+  const fraction = (phase + 1) / BOOT_PHASES.length;
+
+  return (
+    <div className={styles.boot}>
+      <div className={`${styles.bootGrid} ${motion.bootGrid}`} />
+      <div
+        className={`${styles.bootSweep} ${motion.bootSweep}`}
+        style={{
+          background: `linear-gradient(90deg, transparent, ${color}1f, transparent)`,
+        }}
+      />
+
+      <span className={styles.bootAgent}>{agentId}</span>
+
+      <ChevronTrack
+        className={styles.bootTrack}
+        count={18}
+        fraction={fraction}
+        fill={color}
+      />
+
+      <span className={styles.bootStatus}>
+        {BOOT_PHASES[phase]}
+        <span className={`${styles.bootCaret} ${motion.cursorBlink}`} />
+      </span>
     </div>
   );
 }
