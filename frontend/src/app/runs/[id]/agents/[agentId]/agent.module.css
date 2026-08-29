@@ -1,0 +1,467 @@
+/*
+ * One agent's page. Same rules as the rest of the product: no shadows, depth
+ * from borders and ground tints, mono for anything a machine produced.
+ */
+.screen {
+  padding: 18px 22px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Top bar: back out, or step sideways through the population. */
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tertiary);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+.pager {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.pageLink,
+.pageLinkOff {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--secondary);
+  background: var(--page);
+}
+
+.pageLink:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+/* The end of the row: shown, so the control does not jump width. */
+.pageLinkOff {
+  color: var(--faint);
+  border-color: var(--hairline);
+}
+
+/* Identity strip. The left border is the brief's colour, as on the tiles. */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-radius: 7px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.agentId {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.personaName {
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--tertiary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+
+.chip {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  color: var(--secondary);
+}
+
+.chipDone {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.chipBlocked {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+}
+
+/* Marks the screen as standing in, matching the "simulated" tag on Check. */
+.sim {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+
+/* The brief, quoted. This is the whole reason the agent did what it did. */
+.brief {
+  margin: 0;
+  padding: 12px 15px;
+  background: var(--soft);
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+/* Session view beside the journey rail; stacked once there is no room. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Browser frame */
+.browser {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--page);
+}
+
+.urlBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  background: var(--ground);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.dots {
+  display: flex;
+  gap: 4px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.url {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tertiary);
+  background: var(--page);
+  border: 1px solid var(--divider);
+  border-radius: 5px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.liveTag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+/* The point of the page: a session you can actually read. */
+.viewport {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--page);
+  overflow: hidden;
+}
+
+.feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  display: block;
+}
+
+/* Same overshoot easing as the tile, so a stage change reads as a jump. */
+.ring {
+  position: absolute;
+  border: 1.5px solid;
+  border-radius: 4px;
+  transition: all 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 16px;
+  pointer-events: none;
+}
+
+.cursor {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  transition: all 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Journey rail */
+.journey {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px 13px 13px;
+  background: var(--page);
+}
+
+.journeyLabel {
+  margin: 0 0 9px;
+}
+
+.journeyTrack {
+  margin-bottom: 12px;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 9px 64px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 9px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.step:first-child {
+  border-top: 0;
+}
+
+.stepDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  align-self: center;
+}
+
+.stepName {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.stepNote {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--tertiary);
+}
+
+.stepAt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* A pending stage recedes; a blocked one is the loudest thing on the rail. */
+.pending .stepName,
+.pending .stepNote {
+  color: var(--faint);
+}
+
+.blocked .stepName {
+  color: var(--ink);
+}
+
+.blocked .stepNote {
+  color: var(--ink);
+}
+
+.running .stepNote {
+  color: var(--secondary);
+}
+
+/* Outcome */
+.outcome {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--ground);
+}
+
+.outcomeOk {
+  border-color: var(--border-strong);
+}
+
+.outcomeFail {
+  border-color: var(--ink);
+}
+
+.outcomeLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  flex: none;
+}
+
+.outcomeText {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* Session log: every event for this agent, not the last two. */
+.logLabel {
+  margin: 4px 0 0;
+}
+
+.log {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--ground);
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.logEntry {
+  display: grid;
+  grid-template-columns: 46px 64px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.logTime,
+.logStage {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.logStage {
+  color: var(--tertiary);
+}
+
+.logMessage {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+
+.logMessageFail {
+  color: var(--ink);
+}
+
+.logIdle {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+/* An id that is not in this run. */
+.missing {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--ground);
+}
+
+.missingText {
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}

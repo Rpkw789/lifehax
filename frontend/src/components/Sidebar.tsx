@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { useRunOptional } from "@/lib/run-context";
 import styles from "./Sidebar.module.css";
@@ -52,10 +53,25 @@ function navItems(runId: string | null): NavItem[] {
       label: "Readiness audit",
       icon: "audit",
       href: runId ? `/runs/${runId}/input` : undefined,
-      owns: (pathname) => pathname.startsWith("/runs/"),
+      // The run flow, and an agent's own page — but not the run-scoped
+      // sections below, which own their own rows.
+      owns: (pathname) =>
+        pathname.startsWith("/runs/") &&
+        !pathname.endsWith("/personas") &&
+        !pathname.endsWith("/history"),
     },
-    { label: "Past runs", icon: "runs" },
-    { label: "Agent personas", icon: "personas" },
+    {
+      label: "Past runs",
+      icon: "runs",
+      href: runId ? `/runs/${runId}/history` : undefined,
+      owns: (pathname) => pathname.endsWith("/history"),
+    },
+    {
+      label: "Agent personas",
+      icon: "personas",
+      href: runId ? `/runs/${runId}/personas` : undefined,
+      owns: (pathname) => pathname.endsWith("/personas"),
+    },
     {
       label: "Settings",
       icon: "settings",
@@ -82,22 +98,75 @@ function Icon({ name }: { name: keyof typeof ICONS }) {
   );
 }
 
+/** Remembers the rail across reloads. Cosmetic, so a failure here is ignored. */
+const COLLAPSE_KEY = "happy2.sidebar.collapsed";
+
 export function Sidebar() {
   // Optional, not required: the settings screen renders the sidebar with no
   // run in scope.
   const run = useRunOptional();
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Read after mount: the server has no idea what this browser last chose, and
+  // guessing would flash the wrong width.
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
+    } catch {
+      // Private mode, or site data blocked. The default stands.
+    }
+  }, []);
+
+  const toggle = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        // Not worth failing a click over.
+      }
+      return next;
+    });
+  };
 
   return (
-    <div className={styles.sidebar}>
+    <div className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""}`}>
       <div className={styles.brand}>
-        <div className={styles.mark} />
-        <div className={styles.wordmark}>Happy2</div>
-        <div className={styles.beta}>BETA</div>
+        {!collapsed && (
+          <>
+            <div className={styles.mark} />
+            <div className={styles.wordmark}>Happy2</div>
+            <div className={styles.beta}>BETA</div>
+          </>
+        )}
+        {/* Survives the collapse: a rail you cannot reopen is worse than one
+            that takes up room. */}
+        <button
+          type="button"
+          className={styles.toggle}
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            aria-hidden="true"
+          >
+            <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="2" />
+            <path d="M6.2 2.6v10.8" />
+          </svg>
+        </button>
       </div>
 
       <nav className={styles.nav}>
-        <div className={styles.sectionLabel}>Workspace</div>
+        {!collapsed && <div className={styles.sectionLabel}>Workspace</div>}
         {navItems(run?.runId ?? null).map((item) => {
           const active = item.owns?.(pathname) ?? false;
           const className = active
@@ -111,9 +180,10 @@ export function Sidebar() {
                 type="button"
                 className={className}
                 aria-current={active ? "page" : undefined}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon name={item.icon} />
-                {item.label}
+                {!collapsed && item.label}
               </button>
             );
           }
@@ -124,15 +194,16 @@ export function Sidebar() {
               href={item.href}
               className={className}
               aria-current={active ? "page" : undefined}
+              title={collapsed ? item.label : undefined}
             >
               <Icon name={item.icon} />
-              {item.label}
+              {!collapsed && item.label}
             </Link>
           );
         })}
       </nav>
 
-      {run && (
+      {run && !collapsed && (
         <div className={styles.footer}>
           <div className={styles.storeCard}>
             <div className={styles.storeLabel}>Store</div>
