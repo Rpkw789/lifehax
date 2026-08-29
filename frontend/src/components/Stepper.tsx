@@ -30,9 +30,9 @@ export function Stepper({ step }: { step: StepKey }) {
       : `${PLAN.length} agents · ${PERSONAS.length} briefs`;
 
   const go = (key: StepKey) => {
-    // Check always restarts the run; recommend reads a finished one.
+    // Check always restarts the run; recommend and dashboard read a finished one.
     if (key === "check") startRun();
-    else if (key === "recommend") completeRun();
+    else if (key === "recommend" || key === "dashboard") completeRun();
     router.push(`/runs/${runId}/${key}`);
   };
 
