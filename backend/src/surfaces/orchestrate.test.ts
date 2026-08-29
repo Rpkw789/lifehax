@@ -82,6 +82,27 @@ test("marks a failed method unavailable while the other simulations settle", asy
   expect(report.agent_runs).toHaveLength(1);
 });
 
+test("keeps the configured ACP URL in a degraded protocol result", async () => {
+  const input = inputFixture();
+  input.acpPath = "/custom-agent-commerce";
+  const report = await runSurfaceSimulations(input, {
+    workerTimeoutMs: 5,
+    emitForWorker: (surface, phase, message, evidenceId) => ({
+      event_id: `surf_${surface}_${phase}`,
+      sequence: 0,
+      surface,
+      phase,
+      at: input.generatedAt,
+      message,
+      evidence_id: evidenceId,
+    }),
+    protocolWorker: async () => new Promise<never>(() => undefined),
+    guideWorker: async () => ({ surface: "model_readable_guide", evidence: [], probes: {}, critique: null }),
+    searchWorker: async () => ({ surface: "web_search", evidence: [], probes: {}, critique: null, run: failedRun() }),
+  });
+  expect(report.site_audit.agent_commerce.url).toBe("https://example.com/custom-agent-commerce");
+});
+
 test("bounds a hung worker and still returns a degraded report", async () => {
   const report = await runSurfaceSimulations(inputFixture(), {
     workerTimeoutMs: 5,
@@ -142,6 +163,33 @@ test("drops progress emitted by a timed-out worker after it settles", async () =
   expect(messages).not.toContain("late protocol result");
 });
 
+test("preserves evidence references emitted before a worker times out", async () => {
+  const referenced: string[] = [];
+  const report = await runSurfaceSimulations(inputFixture(), {
+    workerTimeoutMs: 5,
+    emitForWorker: (surface, phase, message, evidenceId) => {
+      if (evidenceId) referenced.push(evidenceId);
+      return {
+        event_id: `surf_${referenced.length}_${phase}`,
+        sequence: referenced.length,
+        surface,
+        phase,
+        at: "2026-08-29T10:25:03.114Z",
+        message,
+        evidence_id: evidenceId,
+      };
+    },
+    protocolWorker: async (_context, emit) => {
+      emit("agent_protocol", "fetch", "GET protocol returned HTTP 200", "ev_partial");
+      return new Promise<never>(() => undefined);
+    },
+    guideWorker: async () => ({ surface: "model_readable_guide", evidence: [], probes: {}, critique: null }),
+    searchWorker: async () => ({ surface: "web_search", evidence: [], probes: {}, critique: null, run: failedRun() }),
+  });
+  const reportIds = new Set(report.evidence.map((item) => item.evidence_id));
+  expect(referenced.every((id) => reportIds.has(id))).toBe(true);
+});
+
 test("rejects a run with no enabled shopper brief", async () => {
   const input = inputFixture();
   input.disabledPersonas = [0];
@@ -186,7 +234,7 @@ function inputFixture(): SurfaceSimulationInput {
     storeUrl: "example.com",
     testSkus: "primary",
     disabledPersonas: [],
-    catalogue: { domain: "example.com", origin: "https://example.com", entryUrl: "https://example.com/", hasPath: false, products: [{ url: "https://example.com/items/primary", title: "Primary item", price: "20", attributes: {} }], source: "sitemap" as const, sitemapProductCount: 1, sitemapUrls: ["https://example.com/items/primary"] },
+    catalogue: { domain: "example.com", origin: "https://example.com", entryUrl: "https://example.com/", hasPath: false, products: [{ url: "https://example.com/items/primary", title: "Primary item", price: "20", attributes: {} }], source: "sitemap" as const, sitemapProductCount: 1, sitemapUrls: ["https://example.com/items/primary"], sitemapComplete: true },
     checks: { agentCommerce: probe, ucp: probe, llmsTxt: probe, robots: { ...probe, allowsAgents: true }, sitemap: { ...probe, productsListed: 1 }, pages: [], totals: { productsChecked: 0, withJsonLd: 0, withOfferPrice: 0, priceInServedHtml: 0, withCartForm: 0, quantityCapped: 0 }, checkoutWall: { ...probe, requiresAccount: false } },
     personas: [{ name: "Careful shopper", prompt: "Find a well-documented option", color: "#475569", tag: "CAR" }],
     briefs: ["Find a well-documented option"],

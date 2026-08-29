@@ -43,6 +43,7 @@ function reportInput(): BuildSurfaceCheckResultInput {
       source: "sitemap",
       sitemapProductCount: 1,
       sitemapUrls: ["https://example.com/items/primary"],
+      sitemapComplete: true,
     },
     checks: checksFixture(),
     target: targetFixture(),
@@ -80,6 +81,7 @@ test("does not assert sitemap absence when sitemap membership was unavailable", 
   const input = reportInput();
   input.catalogue.source = "products.json";
   input.catalogue.sitemapUrls = [];
+  input.catalogue.sitemapComplete = false;
   input.checks.sitemap.found = false;
   input.checks.sitemap.status = null;
   const report = buildSurfaceCheckResult(input);

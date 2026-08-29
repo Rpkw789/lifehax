@@ -89,7 +89,10 @@ describe("assessProtocolDocument", () => {
       status: 200,
       contentType: "application/json",
       durationMs: 3,
-      body: JSON.stringify({ capabilities: { checkout: { endpoint: "/buy" } } }),
+      body: JSON.stringify({
+        version: "2026-04-17",
+        capabilities: { checkout: { endpoint: "/buy" } },
+      }),
     });
 
     expect(assessment.supported).toBe(true);
@@ -125,5 +128,37 @@ describe("assessProtocolDocument", () => {
 
     expect(assessment.supported).toBe(false);
     expect(assessment.reason).toContain("valid commerce capability material");
+  });
+
+  test("rejects arbitrary ACP-looking objects without pinned versioned operations", () => {
+    for (const body of [
+      { services: { status: "ok" } },
+      { openapi: { info: { title: "hello" } } },
+      { version: "latest", endpoints: { checkout: "somewhere" } },
+    ]) {
+      const assessment = assessProtocolDocument("acp", {
+        url: "https://example.com/.well-known/agent-commerce",
+        status: 200,
+        contentType: "application/json",
+        durationMs: 3,
+        body: JSON.stringify(body),
+      });
+      expect(assessment.supported).toBe(false);
+    }
+  });
+
+  test("accepts a complete OpenAPI capability document", () => {
+    const assessment = assessProtocolDocument("acp", {
+      url: "https://example.com/.well-known/agent-commerce",
+      status: 200,
+      contentType: "application/json",
+      durationMs: 3,
+      body: JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Agent commerce", version: "2026-04-17" },
+        paths: { "/agent-checkout": { post: { responses: { 200: { description: "ok" } } } } },
+      }),
+    });
+    expect(assessment.supported).toBe(true);
   });
 });

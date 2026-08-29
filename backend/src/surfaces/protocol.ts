@@ -1,6 +1,7 @@
 import type { FetchedDocument } from "../catalogue/snapshot.ts";
 
 export type ProtocolKind = "acp" | "ucp";
+const ACP_STABLE_VERSION = "2026-04-17";
 
 export interface ProtocolAssessment {
   kind: ProtocolKind;
@@ -149,9 +150,28 @@ function isHttpsUrl(value: unknown): boolean {
 }
 
 function assessAcp(parsed: Record<string, unknown>): ProtocolAssessment {
+  if (validOpenApiDocument(parsed)) {
+    return {
+      kind: "acp",
+      found: true,
+      supported: true,
+      parsed,
+      facts: [
+        `ACP assessment pinned to ${ACP_STABLE_VERSION}`,
+        `OpenAPI ${String(parsed.openapi)} exposes callable operations`,
+      ],
+      reason: null,
+    };
+  }
+
+  const version = parsed.version ?? parsed.api_version;
   const observableKeys = ["capabilities", "services", "endpoints", "openapi"];
-  const exposed = observableKeys.filter((key) => hasCapabilityMaterial(key, parsed[key]));
-  if (exposed.length === 0) {
+  const exposed = observableKeys.filter((key) =>
+    key === "openapi"
+      ? isEndpointReference(parsed[key])
+      : containsEndpointMaterial(parsed[key]),
+  );
+  if (version !== ACP_STABLE_VERSION || exposed.length === 0) {
     return {
       kind: "acp",
       found: true,
@@ -167,36 +187,42 @@ function assessAcp(parsed: Record<string, unknown>): ProtocolAssessment {
     found: true,
     supported: true,
     parsed,
-    facts: exposed.map((key) => `ACP document exposes ${key}`),
+    facts: [
+      `ACP assessment pinned to ${ACP_STABLE_VERSION}`,
+      ...exposed.map((key) => `ACP document exposes ${key}`),
+    ],
     reason: null,
   };
 }
 
-function hasCapabilityMaterial(key: string, value: unknown): boolean {
-  if (key === "openapi") {
-    return (typeof value === "string" && value.trim().length > 0) ||
-      (isRecord(value) && Object.keys(value).length > 0);
+function validOpenApiDocument(value: Record<string, unknown>): boolean {
+  if (typeof value.openapi !== "string" || !/^3\.\d+\.\d+$/.test(value.openapi)) {
+    return false;
   }
-  if (Array.isArray(value)) {
-    return value.length > 0 && value.every(validCapabilityValue);
+  if (!isRecord(value.info) || value.info.version !== ACP_STABLE_VERSION ||
+    typeof value.info.title !== "string" || !value.info.title.trim()) {
+    return false;
   }
-  return isRecord(value) && Object.keys(value).length > 0 &&
-    Object.values(value).every(validCapabilityValue);
+  if (!isRecord(value.paths)) return false;
+  const methods = new Set(["get", "post", "put", "patch", "delete"]);
+  return Object.values(value.paths).some((path) =>
+    isRecord(path) && Object.keys(path).some((key) => methods.has(key.toLowerCase())),
+  );
 }
 
-function validCapabilityValue(value: unknown): boolean {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return false;
-    if (trimmed.startsWith("/")) return true;
-    try {
-      const url = new URL(trimmed);
-      return url.protocol === "https:";
-    } catch {
-      return true;
-    }
-  }
-  if (Array.isArray(value)) return value.length > 0 && value.every(validCapabilityValue);
+function containsEndpointMaterial(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsEndpointMaterial);
   if (!isRecord(value)) return false;
-  return Object.keys(value).length > 0 && Object.values(value).every(validCapabilityValue);
+  return Object.entries(value).some(([key, nested]) =>
+    ["endpoint", "url", "schema", "openapi"].includes(key.toLowerCase())
+      ? isEndpointReference(nested)
+      : containsEndpointMaterial(nested),
+  );
+}
+
+function isEndpointReference(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return true;
+  return isHttpsUrl(trimmed);
 }

@@ -52,7 +52,31 @@ export async function runGuideSimulation(
     excerpt: JSON.stringify(parsed).slice(0, 4_000),
   });
   emit("model_readable_guide", "parse", `Parsed ${parsed.links.length} links across ${parsed.sections.length} sections`, extraction.evidence_id);
+  emit(
+    "model_readable_guide",
+    "validate",
+    parsed.structurally_valid
+      ? "llms.txt matches the required structural format"
+      : `llms.txt is structurally invalid: ${parsed.facts.join("; ")}`,
+    extraction.evidence_id,
+  );
   emit("model_readable_guide", "validate", parsed.target_covered ? "Target product is linked directly" : "Target product is not linked directly", extraction.evidence_id);
+  if (!parsed.structurally_valid) {
+    emit("model_readable_guide", "result", "Simulation settled: guide found but structurally unusable", extraction.evidence_id);
+    return {
+      surface: "model_readable_guide",
+      evidence,
+      probes: {
+        llms_txt: probe(
+          url,
+          false,
+          document.status,
+          `Found but structurally invalid; ${parsed.facts.join("; ")}`,
+        ),
+      },
+      critique: null,
+    };
+  }
 
   const selected = selectRelevantGuideLinks(parsed, `${context.target.name} ${context.brief}`, new URL(context.storeUrl).origin, 3);
   let linkedSuccesses = 0;

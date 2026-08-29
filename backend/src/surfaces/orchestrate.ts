@@ -1,4 +1,4 @@
-import type { CheckResult, TargetProduct } from "@contracts/check-result";
+import type { CheckResult, Evidence, TargetProduct } from "@contracts/check-result";
 import {
   validateSurfaceSimulationEvent,
   type SurfaceSimulationEvent,
@@ -95,7 +95,7 @@ export async function runSurfaceSimulations(
     }));
 
   const [protocol, guide, search] = await Promise.all([
-    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker, dependencies.workerTimeoutMs ?? 45_000),
+    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker, dependencies.workerTimeoutMs ?? 45_000, input.acpPath),
     settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker, dependencies.workerTimeoutMs ?? 45_000),
     settleSearch(context, brief, dependencies, searchWorker, dependencies.workerTimeoutMs ?? 45_000),
   ]);
@@ -200,6 +200,7 @@ async function settleStandard(
   emit: SurfaceEventEmitter,
   worker: StandardWorker,
   timeoutMs: number,
+  acpPath?: string,
 ): Promise<SurfaceWorkerResult> {
   const gated = gateEmitter(emit, context.at);
   try {
@@ -214,7 +215,7 @@ async function settleStandard(
   } catch (error) {
     gated.close();
     const timedOut = error instanceof TimeoutError;
-    const evidence = [{
+    const evidence = [...gated.evidence(), {
       evidence_id: `ev_${surface}_degraded`,
       kind: "api_call" as const,
       at: context.at,
@@ -249,7 +250,7 @@ async function settleStandard(
             }
           : {
               agent_commerce: {
-                url: new URL("/.well-known/agent-commerce", origin).href,
+                url: new URL(normalizeAcpPath(acpPath), origin).href,
                 found: false,
                 status: null,
                 note: "Unable to verify",
@@ -263,6 +264,16 @@ async function settleStandard(
             },
       critique: null,
     };
+  }
+}
+
+function normalizeAcpPath(value: string | undefined): string {
+  const candidate = value?.trim() || "/.well-known/agent-commerce";
+  try {
+    const parsed = new URL(candidate, "https://placeholder.invalid");
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return "/.well-known/agent-commerce";
   }
 }
 
@@ -285,23 +296,43 @@ async function settleSearch(
     return result;
   } catch (error) {
     gated.close();
-    return runWebSearchSimulation({
+    const fallback = await runWebSearchSimulation({
       context,
       brief,
       agent: failingSearchAgent(error),
       emit: dependencies.emitForWorker,
     });
+    return {
+      ...fallback,
+      evidence: uniqueEvidence([...gated.evidence(), ...fallback.evidence]),
+    };
   }
 }
 
 function gateEmitter(
   target: SurfaceEventEmitter,
   at: string,
-): { emit: SurfaceEventEmitter; close: () => void } {
+): { emit: SurfaceEventEmitter; close: () => void; evidence: () => Evidence[] } {
   let active = true;
+  const observed = new Map<string, Evidence>();
   return {
-    emit: (surface, phase, message, evidenceId) =>
-      active
+    emit: (surface, phase, message, evidenceId) => {
+      if (active && evidenceId && !observed.has(evidenceId)) {
+        observed.set(evidenceId, {
+          evidence_id: evidenceId,
+          kind: phase === "fetch"
+            ? "fetch"
+            : phase === "model"
+              ? "model_output"
+              : "extraction",
+          at,
+          url: null,
+          status: httpStatus(message),
+          summary: message,
+          excerpt: null,
+        });
+      }
+      return active
         ? target(surface, phase, message, evidenceId)
         : {
             event_id: "surf_ignored_after_settle",
@@ -311,11 +342,24 @@ function gateEmitter(
             at,
             message,
             evidence_id: evidenceId,
-          },
+          };
+    },
     close: () => {
       active = false;
     },
+    evidence: () => [...observed.values()],
   };
+}
+
+function httpStatus(message: string): number | null {
+  const value = Number(message.match(/\bHTTP\s+(\d{3})\b/i)?.[1]);
+  return Number.isInteger(value) ? value : null;
+}
+
+function uniqueEvidence(items: Evidence[]): Evidence[] {
+  const unique = new Map<string, Evidence>();
+  for (const item of items) unique.set(item.evidence_id, item);
+  return [...unique.values()];
 }
 
 const unavailableSearchAgent: ShopperAgent = {

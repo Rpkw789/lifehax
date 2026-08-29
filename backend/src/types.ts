@@ -104,6 +104,8 @@ export interface Catalogue {
   sitemapProductCount: number;
   /** Product-looking URLs observed in the submitted/default sitemap. */
   sitemapUrls: string[];
+  /** True only when every sitemap document needed for membership was read. */
+  sitemapComplete: boolean;
 }
 
 /** One HTTP probe. A missing resource is a finding, not an error. */

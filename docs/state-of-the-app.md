@@ -15,7 +15,9 @@ credentials and a public store.
   treated as support: HTML soft-404s, malformed JSON, and incomplete UCP
   profiles settle as unavailable or unsupported. UCP declarations are checked
   for dated versions, HTTPS specification/schema URLs, and valid transports;
-  ACP convention documents must contain non-empty, typed capability material.
+  ACP convention documents are evaluated against the pinned 2026-04-17
+  snapshot and must contain versioned endpoint material or a complete OpenAPI
+  document with callable operations.
 - Model-readable guide fetches `/llms.txt`, parses its title, summary, sections,
   links, and direct target coverage, then follows at most three relevant
   same-origin HTTP links for content assessment. Missing files display “Unable
@@ -37,6 +39,9 @@ credentials and a public store.
   settlement. The origin fetcher enforces a 1 MB response cap before evidence
   excerpts are produced. SSE subscribes before taking its replay snapshot, so
   events published during replay are queued rather than lost.
+- Sitemap absence is asserted only after complete exact-URL membership
+  observation. Failed, truncated, nested, or deliberately bounded sitemap
+  indexes remain unknown instead of being reported as missing.
 - Check renders the three new methods as plain dark consoles with white text.
   Lines appear only when backend milestones happen. Each settled console can
   disclose its relevant report slice, and the page can disclose the complete
@@ -50,7 +55,7 @@ credentials and a public store.
 Recorded tests make no network calls.
 
 ```text
-backend:  163 tests passed, 0 failed; tsc --noEmit passed
+backend:  171 tests passed, 0 failed; tsc --noEmit passed
 frontend:  12 tests passed, 0 failed; tsc --noEmit passed
 frontend:  next build completed successfully
 ```

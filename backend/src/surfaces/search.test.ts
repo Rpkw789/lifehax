@@ -105,6 +105,32 @@ describe("runWebSearchSimulation", () => {
     expect(result.run.outcome.target_recommended).toBe(false);
     expect(result.run.outcome.failure_codes).toEqual([{ code }]);
   });
+
+  test("links a no-verdict result to durable failure evidence", async () => {
+    const events: SurfaceSimulationEvent[] = [];
+    const agent: ShopperAgent = {
+      kind: "shared-search",
+      model: "anthropic/test-model",
+      async *run(persona, context) {
+        const base = {
+          run_id: context.runId,
+          query_id: persona.query_id,
+          agent_id: "agent_surface_001",
+          agent_kind: "shared-search" as const,
+        };
+        yield { ...base, type: "agent.api", endpoint: "messages", latency_ms: 12 };
+      },
+    };
+    const result = await runWebSearchSimulation({
+      context: workerContext(),
+      brief,
+      agent,
+      emit: emitter(events),
+    });
+    const terminal = events.at(-1);
+    expect(terminal?.evidence_id).not.toBeNull();
+    expect(result.evidence.some((item) => item.evidence_id === terminal?.evidence_id)).toBe(true);
+  });
 });
 
 function workerContext() {

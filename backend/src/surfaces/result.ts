@@ -45,7 +45,7 @@ export function buildSurfaceCheckResult(
   const targetListed = input.catalogue.sitemapUrls.some(
     (url) => resourceKey(url) === resourceKey(input.target.canonical_url),
   );
-  const sitemapMembershipObserved = input.checks.sitemap.found;
+  const sitemapMembershipObserved = input.catalogue.sitemapComplete;
   const evidence = uniqueEvidence([
     ...input.protocol.evidence,
     ...input.guide.evidence,

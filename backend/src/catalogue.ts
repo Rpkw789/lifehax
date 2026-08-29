@@ -6,7 +6,7 @@
  * which is how hard rule 1 ("no product category in source") is satisfied.
  */
 
-import { findNodes, get, jsonLdBlocks, resolve, toOrigin } from "./http";
+import { findNodes, get, jsonLdBlocks, resolve, toOrigin, type Fetched } from "./http";
 import type { Catalogue, CatalogueProduct } from "./types";
 
 const MAX_PRODUCTS = 12;
@@ -17,7 +17,8 @@ export async function snapshot(
 ): Promise<Catalogue> {
   const { origin, domain, entryUrl, hasPath } = toOrigin(storeUrl);
 
-  const sitemapUrls = await productUrlsFromSitemap(origin, sitemapOverride);
+  const sitemap = await observeSitemap(origin, sitemapOverride);
+  const sitemapProductUrls = sitemap.productUrls;
 
   // Shopify hands over the whole catalogue unauthenticated. Take it when it is
   // there — it is richer than anything we can scrape, and it costs one request.
@@ -30,13 +31,14 @@ export async function snapshot(
       hasPath,
       products: shopify.slice(0, MAX_PRODUCTS),
       source: "products.json",
-      sitemapProductCount: sitemapUrls.length,
-      sitemapUrls,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
-  if (sitemapUrls.length > 0) {
-    const products = await productsFromPages(sitemapUrls.slice(0, MAX_PRODUCTS));
+  if (sitemapProductUrls.length > 0) {
+    const products = await productsFromPages(sitemapProductUrls.slice(0, MAX_PRODUCTS));
     return {
       domain,
       origin,
@@ -44,8 +46,9 @@ export async function snapshot(
       hasPath,
       products,
       source: "sitemap",
-      sitemapProductCount: sitemapUrls.length,
-      sitemapUrls,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
@@ -62,8 +65,9 @@ export async function snapshot(
     hasPath,
     products,
     source: products.length > 0 ? "homepage" : "none",
-    sitemapProductCount: sitemapUrls.length,
-    sitemapUrls,
+    sitemapProductCount: sitemapProductUrls.length,
+    sitemapUrls: sitemap.observedUrls,
+    sitemapComplete: sitemap.complete,
   };
 }
 
@@ -72,18 +76,37 @@ export async function productUrlsFromSitemap(
   origin: string,
   override: string,
 ): Promise<string[]> {
+  return (await observeSitemap(origin, override)).productUrls;
+}
+
+export interface SitemapObservation {
+  productUrls: string[];
+  observedUrls: string[];
+  complete: boolean;
+}
+
+export async function observeSitemap(
+  origin: string,
+  override: string,
+  fetchDocument: (url: string) => Promise<Fetched> = get,
+): Promise<SitemapObservation> {
   const start = override.trim()
     ? resolve(origin, override.trim())
     : resolve(origin, "/sitemap.xml");
-  const root = await get(start);
-  if (!root.ok) return [];
+  const root = await fetchDocument(start);
+  if (!root.ok) return { productUrls: [], observedUrls: [], complete: false };
 
   const locs = (body: string): string[] =>
     [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
 
   const top = locs(root.body);
-  const direct = top.filter(isProductUrl);
-  if (direct.length > 0) return unique(direct);
+  if (!/<sitemapindex\b/i.test(root.body)) {
+    return {
+      productUrls: unique(top.filter(isProductUrl)),
+      observedUrls: unique(top),
+      complete: root.truncated !== true,
+    };
+  }
 
   // Sitemap index: fetch the children that look like product sitemaps.
   const children = top
@@ -92,12 +115,24 @@ export async function productUrlsFromSitemap(
     .slice(0, 4);
 
   const found: string[] = [];
+  let complete = root.truncated !== true && children.length === top.length;
   for (const child of children) {
-    const res = await get(child);
-    if (res.ok) found.push(...locs(res.body).filter(isProductUrl));
+    const res = await fetchDocument(child);
+    if (res.ok) {
+      found.push(...locs(res.body));
+      if (res.truncated === true || /<sitemapindex\b/i.test(res.body)) complete = false;
+    } else {
+      complete = false;
+    }
     if (found.length > 400) break;
   }
-  return unique(found);
+  if (found.length > 400) complete = false;
+  const observedUrls = unique(found);
+  return {
+    productUrls: observedUrls.filter(isProductUrl),
+    observedUrls,
+    complete,
+  };
 }
 
 function isProductUrl(url: string): boolean {

@@ -92,7 +92,20 @@ export async function runWebSearchSimulation(
       event.type === "agent.verdict",
   );
   if (!verdict) {
-    input.emit("web_search", "result", "Web search returned no verdict", null);
+    const failureEvidence = addEvidence(evidence, {
+      kind: "extraction",
+      at: now().toISOString(),
+      url: null,
+      status: null,
+      summary: "Web search completed without a structured verdict",
+      excerpt: null,
+    });
+    input.emit(
+      "web_search",
+      "result",
+      "Web search returned no verdict",
+      failureEvidence.evidence_id,
+    );
     return {
       surface: "web_search",
       evidence,

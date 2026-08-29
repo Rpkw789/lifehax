@@ -67,3 +67,50 @@ test("includes followed-link failures in the deterministic critique facts", asyn
   expect(prompt).toContain("1 followed links returned non-success HTTP statuses");
   expect(events.some((event) => event.message.includes("HTTP 404"))).toBe(true);
 });
+
+test("reports a fetched but structurally invalid llms.txt as unusable without model critique", async () => {
+  let modelCalls = 0;
+  const result = await runGuideSimulation(
+    {
+      runId: "run_surface",
+      storeUrl: "https://example.com",
+      target: {
+        product_id: "item_primary",
+        name: "Primary item",
+        canonical_url: "https://example.com/items/primary",
+        gtin: null,
+        sku: null,
+        category: null,
+        price: null,
+      },
+      brief: "Find the Primary item",
+      locale: "en-US",
+      currency: "USD",
+      at: "2026-08-29T10:25:03.114Z",
+      fetcher: {
+        async get(url: string) {
+          return { url, status: 200, body: "plain text without a title", contentType: "text/plain", durationMs: 1 };
+        },
+      },
+    },
+    (surface, phase, message, evidenceId) => ({
+      event_id: `surf_${phase}`,
+      sequence: 0,
+      surface,
+      phase,
+      at: "2026-08-29T10:25:03.114Z",
+      message,
+      evidence_id: evidenceId,
+    }),
+    {
+      critiqueClient: async () => {
+        modelCalls += 1;
+        return {};
+      },
+    },
+  );
+
+  expect(result.probes.llms_txt?.found).toBe(false);
+  expect(result.probes.llms_txt?.note).toContain("Required H1 title is missing");
+  expect(modelCalls).toBe(0);
+});
