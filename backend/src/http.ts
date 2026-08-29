@@ -81,11 +81,29 @@ export function resolve(origin: string, path: string): string {
   }
 }
 
-/** Normalise whatever the user typed into an origin. */
-export function toOrigin(input: string): { origin: string; domain: string } {
+/**
+ * Normalise whatever the user typed.
+ *
+ * `origin` is where the well-known probes have to go — /sitemap.xml and
+ * /.well-known/* only exist at the root. `entryUrl` preserves any path they
+ * typed, because "start at /collections/mens" is a meaningful instruction and
+ * discarding it sends every agent to the homepage instead.
+ */
+export function toOrigin(input: string): {
+  origin: string;
+  domain: string;
+  entryUrl: string;
+  hasPath: boolean;
+} {
   const withScheme = /^https?:\/\//i.test(input) ? input : `https://${input}`;
   const url = new URL(withScheme);
-  return { origin: url.origin, domain: url.host };
+  const path = url.pathname.replace(/\/+$/, "");
+  return {
+    origin: url.origin,
+    domain: url.host,
+    entryUrl: url.toString(),
+    hasPath: path.length > 0,
+  };
 }
 
 /** Every `<script type="application/ld+json">` payload on a page, parsed. */

@@ -15,7 +15,7 @@ export async function snapshot(
   storeUrl: string,
   sitemapOverride: string,
 ): Promise<Catalogue> {
-  const { origin, domain } = toOrigin(storeUrl);
+  const { origin, domain, entryUrl, hasPath } = toOrigin(storeUrl);
 
   const sitemapUrls = await productUrlsFromSitemap(origin, sitemapOverride);
 
@@ -26,6 +26,8 @@ export async function snapshot(
     return {
       domain,
       origin,
+      entryUrl,
+      hasPath,
       products: shopify.slice(0, MAX_PRODUCTS),
       source: "products.json",
       sitemapProductCount: sitemapUrls.length,
@@ -37,19 +39,25 @@ export async function snapshot(
     return {
       domain,
       origin,
+      entryUrl,
+      hasPath,
       products,
       source: "sitemap",
       sitemapProductCount: sitemapUrls.length,
     };
   }
 
-  // Last resort: whatever the homepage links to that looks like a product.
-  const home = await get(origin);
+  // Last resort: whatever the entry page links to that looks like a product.
+  // Using entryUrl rather than the root matters when the user pointed us at a
+  // collection — that page lists products the homepage may not.
+  const home = await get(entryUrl);
   const linked = productLinksFromHtml(home.body, origin).slice(0, MAX_PRODUCTS);
   const products = await productsFromPages(linked);
   return {
     domain,
     origin,
+    entryUrl,
+    hasPath,
     products,
     source: products.length > 0 ? "homepage" : "none",
     sitemapProductCount: sitemapUrls.length,

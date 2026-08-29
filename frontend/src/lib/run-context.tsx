@@ -218,10 +218,16 @@ export function RunProvider({
     return [...live, ...rest].slice(0, 4);
   }, [sessions]);
 
+  // Host only. The tile URL bar appends a per-stage path, so keeping the user's
+  // own path here produced things like "store.com/collections/mens/search".
   const storeHost = useMemo(() => {
     const raw = input.storeUrl.trim();
     if (!raw) return "no store yet";
-    return raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    try {
+      return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).host;
+    } catch {
+      return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    }
   }, [input.storeUrl]);
 
   const value = useMemo<RunContextValue>(
