@@ -56,7 +56,7 @@ services:
       # here is required to run the app.
       - key: DATABASE_URL
         fromDatabase:
-          name: happy2-db
+          name: lifehax
           property: connectionString
 
   - type: web
@@ -80,13 +80,22 @@ services:
 # Saved runs. Without this, every run is lost on restart — and free web services
 # spin down after 15 minutes idle, so "restart" means several times a day.
 #
-# CAVEAT, and it is the whole reason this is a deliberate choice: a FREE Render
+# This describes a database that ALREADY EXISTS, created by hand in the
+# dashboard. Render's GitHub App is not installed on this repo and deploy.yml
+# drives the API by service id, so nothing here provisions anything — the block
+# exists so the names match if the blueprint is ever synced. Change it only to
+# follow the dashboard, never the other way round.
+#
+# CAVEAT, and it is the whole reason free is a deliberate choice: a FREE Render
 # Postgres is DELETED 30 DAYS AFTER CREATION, with a 14-day grace period to
 # upgrade first. Render emails before it happens. Upgrading to a paid instance
 # in the dashboard keeps the data; letting it lapse loses every saved run.
+#
+# The region must match the web services'. `DATABASE_URL` is the INTERNAL
+# connection string, whose `dpg-…-a` hostname does not resolve across regions.
 databases:
-  - name: happy2-db
+  - name: lifehax
     plan: free
     region: singapore
-    databaseName: happy2
-    user: happy2
+    databaseName: lifehax
+    user: lifehax_user
