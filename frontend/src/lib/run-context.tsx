@@ -26,6 +26,7 @@ import { agentStates } from "./simulation";
 import type {
   AgentEvent,
   AgentState,
+  Checks,
   Finding,
   Persona,
   RunInput,
@@ -66,6 +67,8 @@ interface RunContextValue {
   surfaces: Surface[];
   /** One brief per agent — two agents share an archetype, never a brief. */
   briefs: string[];
+  /** The site audit. Drives the protocol and guide columns on Check. */
+  checks: Checks | null;
   catalogueCount: number;
   /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
   sessions: Record<string, string>;
@@ -98,6 +101,7 @@ export function RunProvider({
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [briefs, setBriefs] = useState<string[]>([]);
+  const [checks, setChecks] = useState<Checks | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [surfaces, setSurfaces] = useState<Surface[]>([]);
   const [catalogueCount, setCatalogueCount] = useState(0);
@@ -126,6 +130,9 @@ export function RunProvider({
           ...current,
           [message.agentId]: message.liveViewUrl,
         }));
+        break;
+      case "checks":
+        setChecks(message.checks);
         break;
       case "sessions_closed":
         // The URLs outlive their sessions and would render Browserbase's
@@ -156,6 +163,7 @@ export function RunProvider({
     setEvents([]);
     setSessions({});
     setBriefs([]);
+    setChecks(null);
     setFindings([]);
     setSurfaces([]);
     setError(null);
@@ -255,6 +263,7 @@ export function RunProvider({
       findings,
       surfaces,
       briefs,
+      checks,
       catalogueCount,
       sessions,
       tileIds,
@@ -278,6 +287,7 @@ export function RunProvider({
       findings,
       surfaces,
       briefs,
+      checks,
       catalogueCount,
       sessions,
       tileIds,

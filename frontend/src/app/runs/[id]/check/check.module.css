@@ -1,16 +1,12 @@
 .screen {
-  flex: 1;
-  min-height: 0;
-  display: flex;
+  /* The console sidebar is gone — its output belongs to the browser column —
+     so the screen is a single flow again. */
+  padding: 0 28px 40px;
+  min-width: 0;
 }
 
 /* Scrolls on both axes, so nothing is unreachable at narrow widths. */
-.main {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  padding: 16px 18px 28px;
-}
+
 
 /* Run strip */
 .runStrip {
@@ -148,15 +144,9 @@
 }
 
 /* Livestream */
-.livestreamLabel {
-  margin: 24px 0 10px;
-}
 
-.livestream {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 12px;
-}
+
+
 
 /* Stage board */
 .boardLabel {
@@ -265,71 +255,88 @@
 }
 
 /* Console rail */
-.console {
-  width: clamp(232px, 24vw, 322px);
-  flex: none;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ * The four surface columns. Each one is a different way an AI shopper can
+ * reach the store, evaluated in parallel, so they sit side by side rather
+ * than stacked — the point is that they are happening at once.
+ */
+.columns {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/* Browser agents need more room than a text feed; below this they stack. */
+@media (max-width: 1280px) {
+  .columns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The population-wide agent log, folded down from the old sidebar console. */
+.log {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--ground);
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  background: var(--soft);
-  border-left: 1px solid var(--divider);
-  min-height: 0;
+  gap: 7px;
 }
 
-.consoleHead {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 15px 16px 11px;
-}
-
-.consoleCount {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--faint);
-}
-
-.consoleList {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.consoleEntry {
-  display: flex;
+.logEntry {
+  display: grid;
+  grid-template-columns: 44px 34px 1fr;
   gap: 8px;
-  align-items: flex-start;
-  border-bottom: 1px solid var(--hairline);
-  padding-bottom: 6px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
-.consoleTime {
-  font-family: var(--font-mono);
-  font-size: 10px;
+.logTime {
   color: var(--faint);
-  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
-.consoleBadge {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  flex: none;
-  padding: 2px 4px;
-  border-radius: 3px;
+.logBadge {
   color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 9px;
+  text-align: center;
+  letter-spacing: 0.03em;
 }
 
-.consoleMessage {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--tertiary);
+.logMessage {
+  color: var(--secondary);
 }
 
-.consoleMessageFail {
-  color: var(--ink);
+.logMessageFail {
+  color: var(--blocked);
 }

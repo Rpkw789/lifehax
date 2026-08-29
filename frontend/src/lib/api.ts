@@ -2,7 +2,14 @@
  * Backend client. One place that knows the API shape, so the screens do not.
  */
 
-import type { AgentEvent, Finding, Persona, RunInput, Surface } from "./types";
+import type {
+  AgentEvent,
+  Checks,
+  Finding,
+  Persona,
+  RunInput,
+  Surface,
+} from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3201";
@@ -13,7 +20,7 @@ export type StreamMessage =
   | { type: "personas"; personas: Persona[]; briefs: string[] }
   | { type: "session"; agentId: string; liveViewUrl: string }
   | { type: "sessions_closed" }
-  | { type: "checks"; checks: unknown }
+  | { type: "checks"; checks: Checks }
   | { type: "agent"; event: AgentEvent }
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
   | { type: "done"; status: "complete" | "error"; error: string | null };

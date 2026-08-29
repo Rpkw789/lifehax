@@ -121,3 +121,39 @@ export interface Surface {
   fraction: number;
   note: string;
 }
+
+
+/** One HTTP probe from the site audit. */
+export interface Probe {
+  url: string;
+  found: boolean;
+  status: number | null;
+  note: string | null;
+}
+
+/** The site audit, as the backend reports it. */
+export interface Checks {
+  agentCommerce: Probe;
+  ucp: Probe;
+  llmsTxt: Probe;
+  robots: Probe & { allowsAgents: boolean };
+  sitemap: Probe & { productsListed: number };
+  pages: {
+    url: string;
+    status: number | null;
+    hasProductJsonLd: boolean;
+    hasOfferPrice: boolean;
+    priceInServedHtml: boolean;
+    hasCartForm: boolean;
+    quantityMax: number | null;
+  }[];
+  totals: {
+    productsChecked: number;
+    withJsonLd: number;
+    withOfferPrice: number;
+    priceInServedHtml: number;
+    withCartForm: number;
+    quantityCapped: number;
+  };
+  checkoutWall: Probe & { requiresAccount: boolean };
+}
