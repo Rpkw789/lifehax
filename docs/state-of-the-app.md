@@ -118,14 +118,19 @@ the dark pipeline produces.
 ```
 GET  /health
 POST /runs
-GET  /runs/:id
+GET  /runs                 run history, newest first
+GET  /runs/:id             memory, falling back to the database
 GET  /runs/:id/events      SSE
 POST /runs/:id/evaluate    works, unused by the UI
 ```
 
-No re-run, no run history, no artifact hosting. The self-verifying loop in
-`SPEC.md` has no backing endpoint: nothing persists a run or links one to a
-previous one.
+Runs now persist: a finished run is written to Postgres (`bun:sqlite` with no
+`DATABASE_URL`) and `GET /runs` lists them. **No frontend screen calls `GET
+/runs` yet** — the history page is not built, so like `evaluate`, this lane is
+reachable by `curl` only.
+
+Still missing: re-run, and artifact hosting. The self-verifying loop in
+`SPEC.md` has a backing store now but nothing links one run to a previous one.
 
 ## Decisions this needs
 

@@ -21,8 +21,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Nothing reaches Render that does not pass the same checks a PR would.
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: deploy ${{ matrix.name }}
+    needs: verify
     runs-on: ubuntu-latest
     strategy:
       # One service failing should not hide the other's result.

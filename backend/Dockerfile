@@ -21,9 +21,10 @@ COPY backend/src ./src
 ENV PORT=8080
 EXPOSE 8080
 
-# openFindingsStore() opens ./happy2.sqlite relative to the working directory,
-# so the unprivileged user needs to own it. Note this file is ephemeral on both
-# platforms — it does not survive a restart or redeploy.
+# With DATABASE_URL set the stores talk to Postgres and touch no local file.
+# Without it they fall back to ./happy2.sqlite relative to the working
+# directory, so the unprivileged user still needs to own it — and that file is
+# ephemeral on both platforms, surviving neither a restart nor a redeploy.
 RUN chown -R bun:bun /app
 USER bun
 CMD ["bun", "run", "src/index.ts"]

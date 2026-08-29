@@ -45,7 +45,7 @@ export function createEvaluateRoutes(store: FindingsStore): Hono {
     }
 
     try {
-      store.save(c.req.param("id"), findings);
+      await store.save(c.req.param("id"), findings);
     } catch (error) {
       return jsonError(
         c,

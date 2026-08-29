@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 
-import { runPopulation } from "./agents";
+import { agentConfig, runPopulation } from "./agents";
 import { snapshot } from "./catalogue";
 import { runChecks } from "./checks";
 import { createEvaluateRoutes } from "./evaluate/api/evaluate";
@@ -19,12 +19,19 @@ import { openFindingsStore } from "./evaluate/store/findings";
 import { computeSurfaces, deriveFindings } from "./findings";
 import { llmConfigured } from "./llm";
 import { log, since } from "./log";
+import { openDb } from "./persistence/db";
+import { openRunsStore } from "./persistence/runs";
 import { generatePersonas } from "./personas";
 import { createRun, finish, getRun, publish, subscribe } from "./store";
 import type { StreamMessage } from "./store";
 import type { Run, RunInput } from "./types";
 
 const PORT = Number(process.env.PORT ?? 3201);
+
+// Postgres when DATABASE_URL is set (Render), SQLite otherwise. Runs in memory
+// stay the fast path; the database is what survives a restart or a spin-down.
+const db = openDb();
+const runsStore = await openRunsStore(db);
 
 const app = new Hono();
 
@@ -54,17 +61,21 @@ app.onError((err, c) => {
   return c.json({ error: { code: "internal", message: err.message } }, 500);
 });
 
+const agents = agentConfig();
+
 app.get("/health", (c) =>
   c.json({
     ok: true,
     llm: llmConfigured(),
-    browserbase: Boolean(process.env.BROWSERBASE_API_KEY),
+    browserbase: agents.browserbase,
+    agentModel: agents.model,
+    db: db.engine,
   }),
 );
 
 // The Evaluate lane: contract-driven rules over a posted CheckResult. It owns
 // POST /runs/:id/evaluate and is independent of the SSE run above.
-app.route("/", createEvaluateRoutes(openFindingsStore()));
+app.route("/", createEvaluateRoutes(await openFindingsStore(db)));
 
 app.post("/runs", async (c) => {
   let body: Partial<RunInput>;
@@ -93,17 +104,31 @@ app.post("/runs", async (c) => {
 
   const run = createRun(input);
   // Fire and forget: the client follows progress over SSE.
-  void orchestrate(run).catch((err: unknown) => {
-    log.error(`run ${run.runId} failed`, err);
-    if (err instanceof Error && err.stack) console.error(err.stack);
-    finish(run, err instanceof Error ? err.message : String(err));
-  });
+  void orchestrate(run)
+    .catch((err: unknown) => {
+      log.error(`run ${run.runId} failed`, err);
+      if (err instanceof Error && err.stack) console.error(err.stack);
+      finish(run, err instanceof Error ? err.message : String(err));
+    })
+    // Saved on every exit path, including the early `finish` for an
+    // undiscoverable store. A failed write must not take the run down with it —
+    // the client already has the whole run over SSE.
+    .finally(() => {
+      void runsStore
+        .save(run)
+        .catch((err: unknown) => log.error(`could not save run ${run.runId}`, err));
+    });
 
   return c.json({ runId: run.runId }, 201);
 });
 
-app.get("/runs/:id", (c) => {
-  const run = getRun(c.req.param("id"));
+/** Run history, newest first. Summaries only — no documents over this wire. */
+app.get("/runs", async (c) => c.json({ runs: await runsStore.list() }));
+
+app.get("/runs/:id", async (c) => {
+  // Memory first: a running run is only there. Saved runs come from the
+  // database, which is the only copy that survives a restart.
+  const run = getRun(c.req.param("id")) ?? (await runsStore.load(c.req.param("id")));
   if (!run) {
     return c.json({ error: { code: "not_found", message: "no such run" } }, 404);
   }
@@ -268,9 +293,11 @@ async function orchestrate(run: Run): Promise<void> {
 
 log.info(`listening on http://localhost:${PORT}`, {
   llm: llmConfigured() ? "configured" : "MISSING (using fallbacks)",
-  browserbase: process.env.BROWSERBASE_API_KEY
-    ? "configured"
+  browserbase: agents.browserbase
+    ? `${agents.keys} key(s)`
     : "MISSING (real agents will fail)",
+  agentModel: agents.model,
+  db: db.engine === "postgres" ? "postgres" : "sqlite (ephemeral on Render)",
   logLevel: process.env.LOG_LEVEL ?? "info",
 });
 

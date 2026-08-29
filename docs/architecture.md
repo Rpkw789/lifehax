@@ -4,7 +4,7 @@ Two services, one repo, no external infrastructure.
 
 ```
 frontend/   Next.js 15 App Router, TypeScript, CSS Modules      :3200
-backend/    Bun + Hono, TypeScript, bun:sqlite                  :3201
+backend/    Bun + Hono, TypeScript, Postgres / bun:sqlite       :3201
 ```
 
 Nothing else. No Redis, no external worker, no container orchestration, no
@@ -65,7 +65,9 @@ backend/src/
     errors.ts             JSON error shape
 
   runs/
-    store.ts              bun:sqlite — runs, personas, shoppers, events, findings
+    store.ts              in-memory runs + the per-run event bus
+    persistence/db.ts     one query interface over Postgres and bun:sqlite
+    persistence/runs.ts   saved runs — one JSON document per run
     queue.ts              in-process job queue, concurrency cap
     bus.ts                per-run event fan-out to SSE subscribers
     orchestrator.ts       snapshot → personas → fan-out → assemble CheckResult
@@ -136,10 +138,29 @@ component stay as they are.
 
 ## Persistence
 
-`bun:sqlite`, one file. Tables: `runs`, `personas`, `shoppers`, `events`,
-`findings`. Events are append-only with the per-run sequence number
-`t` as the ordering key, which is what makes SSE reconnect lossless and
-`DEMO_MODE` replay possible.
+Postgres when `DATABASE_URL` is set, `bun:sqlite` otherwise. One code path
+either way: `persistence/db.ts` holds both engines to a single SQL subset
+(TEXT/INTEGER columns, `$1` placeholders, `ON CONFLICT ... DO UPDATE`), so the
+stores above it never branch on engine.
+
+Two tables, each one JSON document per run beside the columns the list views
+need:
+
+| Table | Written | Holds |
+| --- | --- | --- |
+| `runs` | once, when a run stops | the whole `Run`, plus `store_url`, `status`, `created_at`, `findings`, `blocked` |
+| `findings` | on `POST /runs/:id/evaluate` | Evaluate's output; re-evaluation replaces the row |
+
+A live run stays in memory and streams over SSE; the database is what a run
+becomes once it is over. `GET /runs/:id` reads memory first and falls back to
+`runs`, so a reloaded run rehydrates every existing screen unchanged — with its
+Browserbase sessions dropped, because a stopped session's live view is dead.
+
+Deployed, this is a **free** Render Postgres, which Render deletes 30 days
+after creation unless it is upgraded. See the note in `render.yaml`.
+
+Not yet: per-event rows. Events are replayed from the run document rather than
+an append-only table, so SSE reconnect is still not lossless.
 
 ## Failure behaviour
 

@@ -19,7 +19,7 @@ made. Do not re-litigate a decision recorded there without saying so.
 
 ```
 frontend/   Next.js 15 (App Router), TypeScript, CSS Modules. Port 3200.
-backend/    Bun + Hono, TypeScript, bun:sqlite. Port 3201.
+backend/    Bun + Hono, TypeScript, Postgres (bun:sqlite fallback). Port 3201.
 shared/     Contract types and the CheckResult fixture, imported by both services.
 docs/       Architecture, contracts, workstreams, design specs.
 ```
