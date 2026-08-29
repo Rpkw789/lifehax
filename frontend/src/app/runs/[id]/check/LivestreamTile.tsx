@@ -128,7 +128,7 @@ export function LivestreamTile({
       <div className={styles.viewport} data-surface="page-preview">
         {agent.settled ? (
           <SettledState
-            outcome={agent.ok ? "reached checkout" : "blocked"}
+            blocked={agent.blocked}
             reason={agent.blocked ? agent.reason : undefined}
             path={path}
           />
@@ -166,16 +166,23 @@ export function LivestreamTile({
           <PageSkeleton />
         )}
 
-        <div
-          className={`${styles.ring} ${motion.ringPulse}`}
-          style={{
-            borderColor: color,
-            top: region.top,
-            left: region.left,
-            width: region.width,
-            height: region.height,
-          }}
-        />
+        {/* RING_REGIONS are hardcoded percentage boxes from the prototype —
+            they never tracked anything the agent was doing. On a settled tile
+            there is no page to point at, and on a live Browserbase view the
+            box lands wherever it lands. Shown only while a scripted tile is
+            still moving, where it reads as activity rather than as a claim. */}
+        {!agent.settled && !showLiveView ? (
+          <div
+            className={`${styles.ring} ${motion.ringPulse}`}
+            style={{
+              borderColor: color,
+              top: region.top,
+              left: region.left,
+              width: region.width,
+              height: region.height,
+            }}
+          />
+        ) : null}
 
         {/* The sweep stops once the agent has settled, either way. */}
         {!agent.settled && (
@@ -187,6 +194,7 @@ export function LivestreamTile({
           />
         )}
 
+        {!agent.settled && !showLiveView ? (
         <div
           className={`${styles.cursor} ${motion.cursorBlink}`}
           style={{
@@ -194,6 +202,7 @@ export function LivestreamTile({
             left: `calc(${region.left} + ${region.width} - 4px)`,
           }}
         />
+        ) : null}
 
         <div className={styles.caption}>
           {agent.settled ? caption : booting && !showLiveView ? bootCaption : caption}
@@ -206,9 +215,12 @@ export function LivestreamTile({
             › session opening…
           </span>
         ) : (
-          logs.map((event) => (
+          logs.map((event, i) => (
             <span
-              key={`${event.t}-${event.stage}-${event.kind}`}
+              // `t` is a 140ms tick, so two events from one agent inside the
+              // same window collide — a failing browser emits twice. Position
+              // in the agent's own append-only stream is unique by definition.
+              key={events.length - logs.length + i}
               className={`${styles.log} ${
                 event.kind === "fail" ? styles.logFail : ""
               }`}
@@ -245,18 +257,22 @@ const BOOT_PHASES = [
  * for this agent, and a moving frame would suggest otherwise.
  */
 function SettledState({
-  outcome,
+  blocked,
   reason,
   path,
 }: {
-  outcome: string;
+  blocked: boolean;
   reason?: string;
   path?: string;
 }) {
   return (
-    <div className={styles.settled}>
-      <div className={`${styles.bootGrid}`} />
-      <span className={styles.settledOutcome}>{outcome}</span>
+    <div className={`${styles.settled} ${blocked ? styles.settledBlocked : styles.settledOk}`}>
+      <span className={styles.settledMark} aria-hidden="true">
+        {blocked ? "✕" : "✓"}
+      </span>
+      <span className={styles.settledOutcome}>
+        {blocked ? "Blocked" : "Reached checkout"}
+      </span>
       {reason ? <span className={styles.settledReason}>{reason}</span> : null}
       {path ? <span className={styles.settledPath}>{path}</span> : null}
     </div>

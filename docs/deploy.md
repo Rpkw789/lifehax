@@ -22,23 +22,44 @@ Both services deploy from `render.yaml` at the repo root.
    - `CLOUDFLARE_API_TOKEN` — an **AI Gateway token** (permission: AI Gateway
      Run), not a general Cloudflare API token. A general token fails with a
      bare `401 Authentication error` that does not mention permissions.
-   - `NEXT_PUBLIC_API_BASE` — leave blank for now, see step 4
+   - `NEXT_PUBLIC_API_BASE` — leave blank for now, see step 5
 
    `CLOUDFLARE_GATEWAY_ID` is set in the blueprint and must match the gateway's
    real name. `default` only works if a gateway is literally called that.
-   Render also creates **happy2-db**, the free Postgres declared at the bottom
-   of `render.yaml`, and wires `DATABASE_URL` into the backend for you — there
-   is nothing to type. If the blueprint was already synced before the database
-   existed, re-sync it from the dashboard to pick it up.
-4. Once **happy2-backend** is live, copy its URL (`https://….onrender.com`) into
+4. Create the database **by hand**: **New → Postgres**, free plan, the same
+   region as the services. The `databases:` block in `render.yaml` does *not*
+   do this for you — see below. Then copy its **Internal Database URL** into
+   **happy2-backend** → Environment → `DATABASE_URL`. Saving redeploys the
+   service on its own.
+5. Once **happy2-backend** is live, copy its URL (`https://….onrender.com`) into
    **happy2-frontend**'s `NEXT_PUBLIC_API_BASE` and redeploy the frontend.
 
-Step 4 is manual on purpose: `src/lib/api.ts` reads `NEXT_PUBLIC_API_BASE`, which
+Step 5 is manual on purpose: `src/lib/api.ts` reads `NEXT_PUBLIC_API_BASE`, which
 Next inlines into the *client* bundle at build time, so it cannot be a runtime
 variable. Render blueprints have no string concatenation and `onrender.com`
 subdomains are globally unique, so the backend URL cannot be derived ahead of
 time. Changing the backend URL later means rebuilding the frontend image, not
 just editing a variable.
+
+### The blueprint does not provision the database
+
+`render.yaml` declares `databases: - name: lifehax`, but nothing acts on it.
+Render's GitHub App is not installed on this repo — `deploy.yml` says as much —
+so no blueprint sync happens, and `deploy.yml` itself drives the REST API by
+service id, which only redeploys existing services. The block is there so the
+names line up if anyone ever does sync it, and so `fromDatabase` resolves.
+
+In practice that means the database and its `DATABASE_URL` are dashboard state,
+not repo state. Confirm which one the backend actually picked up:
+
+```sh
+curl -s https://happy2-backend.onrender.com/health
+# {"ok":true,...,"db":"postgres"}   <- reading the database
+# {"ok":true,...,"db":"sqlite"}     <- fell back; DATABASE_URL is not set
+```
+
+`sqlite` there is not an error — the backend works, it just writes to a
+container-local file that the next deploy or spin-down erases.
 
 ### Why Render suits this app
 

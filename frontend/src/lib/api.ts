@@ -8,6 +8,7 @@ import type {
   Checks,
   Finding,
   Persona,
+  PersonaOverride,
   RunInput,
   Surface,
 } from "./types";
@@ -38,6 +39,48 @@ export async function listRuns(): Promise<RunSummary[]> {
     );
   }
   return body.runs;
+}
+
+/**
+ * Persona edits for a store, which the backend applies to that store's next
+ * run. Filed against the store host, not a run — a finished run's personas are
+ * the record of what it measured and are never rewritten.
+ */
+export async function loadPersonaOverrides(
+  storeHost: string,
+): Promise<PersonaOverride[]> {
+  const res = await fetch(
+    `${API_BASE}/stores/${encodeURIComponent(storeHost)}/personas`,
+  );
+  const body = (await res.json()) as
+    | { overrides: PersonaOverride[] }
+    | { error: { message: string } };
+  if (!res.ok || !("overrides" in body)) {
+    throw new Error(
+      "error" in body ? body.error.message : `backend returned ${res.status}`,
+    );
+  }
+  return body.overrides;
+}
+
+export async function savePersonaOverrides(
+  storeHost: string,
+  overrides: PersonaOverride[],
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/stores/${encodeURIComponent(storeHost)}/personas`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ overrides }),
+    },
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: { message: string };
+    } | null;
+    throw new Error(body?.error?.message ?? `backend returned ${res.status}`);
+  }
 }
 
 export async function createRun(input: RunInput): Promise<string> {

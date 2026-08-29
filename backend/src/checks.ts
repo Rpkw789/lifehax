@@ -6,6 +6,7 @@
  * it fast (~3s) and free.
  */
 
+import { sitemapsDeclaredIn } from "./catalogue";
 import { findNodes, get, jsonLdBlocks, resolve } from "./http";
 import type { Catalogue, Checks, PageCheck, Probe, RunInput } from "./types";
 
@@ -51,10 +52,22 @@ export async function runChecks(
     allowsAgents: !blocksKnownAgents(robotsRes.body),
   };
 
-  const sitemapUrl = input.sitemapUrl.trim()
-    ? resolve(origin, input.sitemapUrl.trim())
-    : resolve(origin, "/sitemap.xml");
-  const sitemapRes = await get(sitemapUrl);
+  // A store that publishes a sitemap somewhere other than /sitemap.xml is not
+  // undiscoverable, and scoring it zero for discovery would be a false
+  // negative. robots.txt is already in hand from the check above, so read what
+  // it declares before falling back to the guess.
+  const declared = sitemapsDeclaredIn(robotsRes.body, origin);
+  const sitemapCandidates = input.sitemapUrl.trim()
+    ? [resolve(origin, input.sitemapUrl.trim())]
+    : [...declared, resolve(origin, "/sitemap.xml")];
+
+  let sitemapUrl = sitemapCandidates[0]!;
+  let sitemapRes = await get(sitemapUrl);
+  for (const candidate of sitemapCandidates.slice(1)) {
+    if (sitemapRes.ok) break;
+    sitemapUrl = candidate;
+    sitemapRes = await get(candidate);
+  }
   const sitemap: Checks["sitemap"] = {
     url: sitemapUrl,
     found: sitemapRes.ok,

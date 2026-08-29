@@ -140,40 +140,46 @@ export default function CheckScreen() {
         running={running}
       />
 
-      <div className={styles.columns}>
-        {surfaces.map((surface) =>
-          surface.key === "browse" ? (
-            <SurfaceColumn
-              key={surface.key}
-              surface={surface}
-              tick={tick}
-              color={SURFACE_COLORS.browse!}
-            >
-              <div className={tileStyles.tiles}>
-                {tiles.map((agent) => (
-                  <LivestreamTile
-                    key={agent.id}
-                    agent={agent}
-                    storeHost={storeHost}
-                    liveViewUrl={sessions[agent.id]}
-                    booting={running && agent.progress === 0 && !agent.blocked}
-                    brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
-                    events={events.filter((e) => e.agentId === agent.id)}
-                    href={`/runs/${runId}/agents/${agent.id}`}
-                  />
-                ))}
-              </div>
-            </SurfaceColumn>
-          ) : (
+      {/* The three probe feeds are text and read fine narrow; the agent tiles
+          carry live video and were being squeezed into a quarter of the row. */}
+      <div className={styles.feeds}>
+        {surfaces
+          .filter((surface) => surface.key !== "browse")
+          .map((surface) => (
             <SurfaceColumn
               key={surface.key}
               surface={surface}
               tick={tick}
               color={SURFACE_COLORS[surface.key]!}
             />
-          ),
-        )}
+          ))}
       </div>
+
+      {surfaces
+        .filter((surface) => surface.key === "browse")
+        .map((surface) => (
+          <SurfaceColumn
+            key={surface.key}
+            surface={surface}
+            tick={tick}
+            color={SURFACE_COLORS.browse!}
+          >
+            <div className={tileStyles.tiles}>
+              {tiles.map((agent) => (
+                <LivestreamTile
+                  key={agent.id}
+                  agent={agent}
+                  storeHost={storeHost}
+                  liveViewUrl={sessions[agent.id]}
+                  booting={running && agent.progress === 0 && !agent.blocked}
+                  brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
+                  events={events.filter((e) => e.agentId === agent.id)}
+                  href={`/runs/${runId}/agents/${agent.id}`}
+                />
+              ))}
+            </div>
+          </SurfaceColumn>
+        ))}
 
       <SectionLabel className={styles.stagesLabel}>
         Journey stages · agents reaching each
@@ -285,9 +291,12 @@ export default function CheckScreen() {
         {events
           .slice(-8)
           .reverse()
-          .map((event) => (
+          // Index into the full stream, not the composite: `t` is a 140ms tick,
+          // so one agent failing twice inside a window produces two events that
+          // are identical on every field the key used.
+          .map((event, i) => (
             <div
-              key={`${event.agentId}-${event.stage}-${event.kind}-${event.t}`}
+              key={events.length - 1 - i}
               className={styles.logEntry}
             >
               <span className={styles.logTime}>{elapsedLabel(event.t)}</span>

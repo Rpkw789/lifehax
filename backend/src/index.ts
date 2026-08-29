@@ -20,11 +20,12 @@ import { computeSurfaces, deriveFindings } from "./findings";
 import { llmConfigured } from "./llm";
 import { log, since } from "./log";
 import { openDb } from "./persistence/db";
+import { hostKey, openPersonaOverridesStore } from "./persistence/personas";
 import { openRunsStore } from "./persistence/runs";
 import { generatePersonas } from "./personas";
 import { createRun, finish, getRun, publish, subscribe } from "./store";
 import type { StreamMessage } from "./store";
-import type { Run, RunInput } from "./types";
+import type { PersonaOverride, Run, RunInput } from "./types";
 
 const PORT = Number(process.env.PORT ?? 3201);
 
@@ -32,6 +33,7 @@ const PORT = Number(process.env.PORT ?? 3201);
 // stay the fast path; the database is what survives a restart or a spin-down.
 const db = openDb();
 const runsStore = await openRunsStore(db);
+const personaOverrides = await openPersonaOverridesStore(db);
 
 const app = new Hono();
 
@@ -39,7 +41,7 @@ app.use(
   "*",
   cors({
     origin: (o) => o ?? "*",
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "OPTIONS"],
     allowHeaders: ["content-type"],
   }),
 );
@@ -120,6 +122,55 @@ app.post("/runs", async (c) => {
     });
 
   return c.json({ runId: run.runId }, 201);
+});
+
+/**
+ * Persona edits for a store, which seed its next run.
+ *
+ * Filed against the store rather than a run: a finished run's personas are the
+ * record of what was measured and never change, so an edit made while looking
+ * at one is an instruction for the next one.
+ */
+app.get("/stores/:host/personas", async (c) => {
+  const overrides = await personaOverrides.load(c.req.param("host"));
+  return c.json({ overrides });
+});
+
+app.put("/stores/:host/personas", async (c) => {
+  const host = hostKey(c.req.param("host"));
+  if (!host) {
+    return c.json(
+      { error: { code: "missing_host", message: "a store host is required" } },
+      400,
+    );
+  }
+
+  let body: { overrides?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: { code: "bad_json", message: "body must be JSON" } }, 400);
+  }
+
+  if (!Array.isArray(body.overrides)) {
+    return c.json(
+      { error: { code: "bad_overrides", message: "overrides must be an array" } },
+      400,
+    );
+  }
+
+  const overrides = (body.overrides as PersonaOverride[])
+    .filter((o) => typeof o?.tag === "string" && o.tag.length > 0)
+    .map((o) => ({
+      tag: o.tag,
+      ...(typeof o.name === "string" ? { name: o.name } : {}),
+      ...(Array.isArray(o.briefs)
+        ? { briefs: o.briefs.map((b) => (typeof b === "string" ? b : null)) }
+        : {}),
+    }));
+
+  await personaOverrides.save(host, overrides);
+  return c.json({ overrides });
 });
 
 /** Run history, newest first. Summaries only — no documents over this wire. */
@@ -239,7 +290,10 @@ async function orchestrate(run: Run): Promise<void> {
   }
 
   stepAt = Date.now();
-  const { personas, briefs } = await generatePersonas(catalogue);
+  // Whatever this store's owner edited on the personas screen wins over what
+  // the generator would have written for those seats.
+  const overrides = await personaOverrides.load(run.input.storeUrl);
+  const { personas, briefs } = await generatePersonas(catalogue, overrides);
   run.personas = personas;
   run.briefs = briefs;
   runLog.info("briefs", {
@@ -247,6 +301,7 @@ async function orchestrate(run: Run): Promise<void> {
     archetypes: personas.length,
     briefs: briefs.length,
     generated: llmConfigured(),
+    edited: overrides.length,
   });
   for (const [i, brief] of briefs.entries()) {
     runLog.debug(`  brief ${i + 1}`, brief.slice(0, 90));

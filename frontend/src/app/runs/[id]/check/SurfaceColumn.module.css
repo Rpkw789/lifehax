@@ -138,16 +138,14 @@
  */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 8px;
-  padding: 8px;
-  max-height: 840px;
-  overflow-y: auto;
+  /* Full row now, so tiles can be big enough to actually watch. */
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 12px;
+  padding: 12px;
 }
 
 @media (max-width: 1500px) {
   .tiles {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    max-height: 700px;
   }
 }
