@@ -23,6 +23,7 @@ import type { CheckResult } from "@contracts/check-result";
 import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
 import { createRun, getRun, subscribeToRun, type StreamMessage } from "./api";
+import { anchorFor, elapsedSeconds } from "./elapsed";
 import { hydrate } from "./hydrate";
 import { ARCHETYPE_PERSONAS, TILE_COUNT } from "./fixtures";
 import { agentStates } from "./simulation";
@@ -59,8 +60,14 @@ interface RunContextValue {
    * starting a second run on top of one it is about to load.
    */
   restore: Restore;
-  /** Highest tick seen, driving the elapsed readout. */
+  /** Highest tick seen. Drives per-stage progress. */
   tick: number;
+  /**
+   * Seconds since the run began. Counts on the wall clock while a run is in
+   * flight and freezes at the last event once it settles — reading it off the
+   * newest event alone left the display stuck between events.
+   */
+  elapsed: number;
   running: boolean;
   complete: boolean;
   error: string | null;
@@ -134,6 +141,9 @@ export function RunProvider({
   const [error, setError] = useState<string | null>(null);
   const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({});
   const [restore, setRestore] = useState<Restore>("pending");
+  /** When this run began, on the client's clock. Null once it has settled. */
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const unsubscribe = useRef<(() => void) | null>(null);
   const started = useRef(false);
@@ -231,6 +241,17 @@ export function RunProvider({
         setComplete(state.complete);
         setError(state.error);
         setRestore("restored");
+        // A settled run's elapsed time comes from its own events; only one
+        // still in flight gets a clock, anchored so the client's `now` agrees
+        // with the ticks the backend has already stamped.
+        setStartedAtMs(
+          state.running
+            ? anchorFor(
+                state.events.reduce((max, e) => Math.max(max, e.t), 0),
+                Date.now(),
+              )
+            : null,
+        );
 
         // A run still in flight is still in memory, so it can be followed the
         // rest of the way rather than frozen at the moment it was read.
@@ -260,6 +281,7 @@ export function RunProvider({
     started.current = true;
 
     setRestore("none");
+    setStartedAtMs(Date.now());
     setEvents([]);
     setSessions({});
     setBriefs([]);
@@ -315,6 +337,17 @@ export function RunProvider({
     [events],
   );
 
+  // Tenth-of-a-second resolution, matching what the readout prints. The
+  // interval exists only while a run is in flight, so a settled screen is not
+  // re-rendering ten times a second for a number that cannot change.
+  useEffect(() => {
+    if (!running || startedAtMs === null) return;
+    const id = setInterval(() => setNowMs(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [running, startedAtMs]);
+
+  const elapsed = elapsedSeconds({ running, startedAtMs, nowMs, tick });
+
   // Before the backend has generated briefs, fall back to the archetype list so
   // the Input screen has something to show.
   const shownPersonas: Persona[] =
@@ -350,6 +383,7 @@ export function RunProvider({
       runId,
       restore,
       tick,
+      elapsed,
       running,
       complete,
       error,
@@ -379,6 +413,7 @@ export function RunProvider({
       runId,
       restore,
       tick,
+      elapsed,
       running,
       complete,
       error,

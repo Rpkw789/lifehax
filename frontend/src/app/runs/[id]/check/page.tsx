@@ -8,7 +8,7 @@ import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
 import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
-import { elapsedLabel, logText } from "@/lib/simulation";
+import { elapsedLabel, logText, secondsLabel } from "@/lib/simulation";
 import { surfaceConsoleState } from "@/lib/surface-events";
 import motion from "@/styles/motion.module.css";
 import styles from "./check.module.css";
@@ -33,6 +33,7 @@ export default function CheckScreen() {
     runId,
     storeHost,
     tick,
+    elapsed,
     restore,
     running,
     complete,
@@ -74,7 +75,7 @@ export default function CheckScreen() {
     .filter((a): a is NonNullable<typeof a> => a !== undefined);
 
   const stats: [string, string][] = [
-    ["Elapsed", elapsedLabel(tick)],
+    ["Elapsed", secondsLabel(elapsed)],
     ["Agents settled", `${settled}/${agents.length}`],
     ["Checkout hit rate", `${hitRate}%`],
   ];

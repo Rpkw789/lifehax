@@ -7,15 +7,21 @@
  * shape is unchanged, so the components did not have to move.
  */
 
+import { MS_PER_TICK } from "./elapsed";
 import { STAGES, STAGE_PASS_LOGS } from "./fixtures";
 import type { AgentEvent, AgentState, Persona, StageNumber } from "./types";
 
 /** Ticks in a nominal run, used for progress display before completion. */
 export const TOTAL_TICKS = 120;
 
-/** Displayed elapsed time for a tick, e.g. "4.2s". */
+/** Displayed elapsed time, e.g. "4.2s". */
+export function secondsLabel(seconds: number): string {
+  return `${seconds.toFixed(1)}s`;
+}
+
+/** When an event happened, from its tick. */
 export function elapsedLabel(tick: number): string {
-  return `${(tick * 0.14).toFixed(1)}s`;
+  return secondsLabel((tick * MS_PER_TICK) / 1000);
 }
 
 /** Agent ids are stable and ordered: A01..A10, two per brief. */
