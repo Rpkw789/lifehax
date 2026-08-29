@@ -115,6 +115,12 @@ export default function RecommendScreen() {
             </p>
             <div className={styles.summaryActions}>
               <Button onClick={() => exportAs("md")}>Export report</Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/runs/${runId}/dashboard`)}
+              >
+                View dashboard
+              </Button>
               <Button variant="outlineSoft" onClick={() => exportAs("json")}>
                 Export JSON
               </Button>
