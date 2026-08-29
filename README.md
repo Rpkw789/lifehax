@@ -48,14 +48,10 @@ Keys and `DATABASE_URL` upgrade a run rather than enable it.
 | `BROWSERBASE_API_KEYS` | the real browser agents | those agents report the key is missing |
 | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | generated briefs and written findings | archetype briefs, rule-based findings |
 | `DATABASE_URL` | saved runs in Postgres, which is what survives a deploy | a local `happy2.sqlite` file, wiped on every restart |
+| `OPENAI_API_KEY` | ACP/UCP and `llms.txt` critiques plus the additional Web-search simulation | HTTP surface evidence still runs; critiques fall back and Web search reports unavailable |
 
-The Cloudflare token must be an **AI Gateway token** with the `AI Gateway Run`
-permission, created inside the gateway's own Settings. A general Cloudflare API
-token fails with a bare `401` that says nothing about permissions — budget an
-hour if you get this wrong. `CLOUDFLARE_GATEWAY_ID` must be the gateway's real
-name; `default` only works if a gateway is literally called that. The Anthropic
-key itself lives in the gateway via BYOK, so no provider key appears in this
-repo.
+The Cloudflare token needs **Account > Workers AI > Read**. Third-party models
+are billed through Cloudflare Unified Billing, so the account needs credits.
 
 Browserbase's free tier allows 3 concurrent browsers and 5 session requests per
 minute per account, which is why `HAPPY2_REAL_AGENTS` defaults to 3. Pool more
@@ -65,7 +61,7 @@ Check what a running server picked up:
 
 ```sh
 curl -s localhost:3201/health
-# {"ok":true,"llm":true,"browserbase":true,"db":"sqlite"}
+# {"ok":true,"llm":true,"surfaceOpenAi":true,"browserbase":true,"db":"sqlite"}
 ```
 
 That reports whether the variables are *set*, not whether they *work*. If

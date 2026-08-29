@@ -79,11 +79,12 @@ sync_secrets() {
   step "Syncing secrets to Secret Manager"
   put_secret BROWSERBASE_API_KEY "${BROWSERBASE_API_KEY:-}"
   put_secret CLOUDFLARE_API_TOKEN "${CLOUDFLARE_API_TOKEN:-}"
+  put_secret OPENAI_API_KEY "${OPENAI_API_KEY:-}"
 
   local pnum sa
   pnum="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
   sa="${pnum}-compute@developer.gserviceaccount.com"
-  for name in BROWSERBASE_API_KEY CLOUDFLARE_API_TOKEN; do
+  for name in BROWSERBASE_API_KEY CLOUDFLARE_API_TOKEN OPENAI_API_KEY; do
     gcloud secrets add-iam-policy-binding "$name" \
       --member "serviceAccount:${sa}" \
       --role roles/secretmanager.secretAccessor \
@@ -113,8 +114,8 @@ deploy_backend() {
     --min-instances=0 --max-instances=1 \
     --no-cpu-throttling \
     --timeout=3600 \
-    --set-env-vars "CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-},CLOUDFLARE_GATEWAY_ID=${CLOUDFLARE_GATEWAY_ID:-default},HAPPY2_MODEL=${HAPPY2_MODEL:-claude-sonnet-5},HAPPY2_REAL_AGENTS=${HAPPY2_REAL_AGENTS:-3},HAPPY2_STAGE_DELAY_MS=${HAPPY2_STAGE_DELAY_MS:-0}" \
-    --set-secrets "BROWSERBASE_API_KEY=BROWSERBASE_API_KEY:latest,CLOUDFLARE_API_TOKEN=CLOUDFLARE_API_TOKEN:latest"
+    --set-env-vars "CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-},CLOUDFLARE_GATEWAY_ID=${CLOUDFLARE_GATEWAY_ID:-default},HAPPY2_MODEL=${HAPPY2_MODEL:-claude-sonnet-5},HAPPY2_OPENAI_MODEL=${HAPPY2_OPENAI_MODEL:-gpt-5-mini},HAPPY2_REAL_AGENTS=${HAPPY2_REAL_AGENTS:-3},HAPPY2_STAGE_DELAY_MS=${HAPPY2_STAGE_DELAY_MS:-0}" \
+    --set-secrets "BROWSERBASE_API_KEY=BROWSERBASE_API_KEY:latest,CLOUDFLARE_API_TOKEN=CLOUDFLARE_API_TOKEN:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest"
 }
 
 backend_url() {

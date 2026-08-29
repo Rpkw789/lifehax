@@ -42,18 +42,39 @@ export class CloudflareWebSearchClient implements WebSearchClient {
   }
 
   async #send(params: MessageCreateParams, signal: AbortSignal): Promise<unknown[]> {
-    const response = await this.#transport(
-      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.#accountId)}/ai/v1/messages`,
-      {
-        method: "POST",
-        signal,
-        headers: { authorization: `Bearer ${this.#apiToken}`, "content-type": "application/json" },
-        body: JSON.stringify(params),
-      },
-    );
-    if (!response.ok) throw new Error(`Cloudflare Anthropic request failed with HTTP ${response.status}`);
-    return parseSseContent(await response.text());
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let response: Response;
+      try {
+        response = await this.#transport(
+          `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.#accountId)}/ai/v1/messages`,
+          {
+            method: "POST",
+            signal,
+            headers: { authorization: `Bearer ${this.#apiToken}`, "content-type": "application/json" },
+            body: JSON.stringify(params),
+          },
+        );
+      } catch (error) {
+        if (attempt === 0 && !signal.aborted) continue;
+        throw error;
+      }
+      if (!response.ok) {
+        if (attempt === 0 && transientStatus(response.status)) continue;
+        throw new Error(`Cloudflare Anthropic request failed with HTTP ${response.status}`);
+      }
+      try {
+        return parseSseContent(await response.text());
+      } catch (error) {
+        if (attempt === 0 && !signal.aborted) continue;
+        throw error;
+      }
+    }
+    throw new Error("Cloudflare Anthropic request failed");
   }
+}
+
+function transientStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 export function webSearchMessageParams(model: string, request: WebSearchRequest, stream: boolean): MessageCreateParams {

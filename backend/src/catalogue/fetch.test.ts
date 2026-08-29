@@ -48,3 +48,37 @@ test("OriginFetcher spaces outbound requests using its per-origin limiter", asyn
 
   assert.deepEqual(sleeps, [100]);
 });
+
+test("OriginFetcher rejects an oversized content-length before reading the body", async () => {
+  const fetcher = new OriginFetcher(
+    "https://shop.example",
+    publicLookup,
+    async () => new Response("small", { headers: { "content-length": "1000001" } }),
+  );
+
+  await assert.rejects(
+    fetcher.get("https://shop.example/oversized"),
+    /response exceeded 1000000 bytes/,
+  );
+});
+
+test("OriginFetcher stops streaming a response that exceeds the byte cap", async () => {
+  const chunk = new Uint8Array(600_000);
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(chunk);
+      controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+  const fetcher = new OriginFetcher(
+    "https://shop.example",
+    publicLookup,
+    async () => new Response(body),
+  );
+
+  await assert.rejects(
+    fetcher.get("https://shop.example/streamed"),
+    /response exceeded 1000000 bytes/,
+  );
+});

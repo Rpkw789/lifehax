@@ -6,7 +6,7 @@
  * which is how hard rule 1 ("no product category in source") is satisfied.
  */
 
-import { findNodes, get, jsonLdBlocks, resolve, toOrigin } from "./http";
+import { findNodes, get, jsonLdBlocks, resolve, toOrigin, type Fetched } from "./http";
 import type { Catalogue, CatalogueProduct } from "./types";
 
 const MAX_PRODUCTS = 12;
@@ -17,7 +17,8 @@ export async function snapshot(
 ): Promise<Catalogue> {
   const { origin, domain, entryUrl, hasPath } = toOrigin(storeUrl);
 
-  const sitemapUrls = await productUrlsFromSitemap(origin, sitemapOverride);
+  const sitemap = await observeSitemap(origin, sitemapOverride);
+  const sitemapProductUrls = sitemap.productUrls;
 
   // Shopify hands over the whole catalogue unauthenticated. Take it when it is
   // there — it is richer than anything we can scrape, and it costs one request.
@@ -30,12 +31,14 @@ export async function snapshot(
       hasPath,
       products: shopify.slice(0, MAX_PRODUCTS),
       source: "products.json",
-      sitemapProductCount: sitemapUrls.length,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
-  if (sitemapUrls.length > 0) {
-    const products = await productsFromPages(sitemapUrls.slice(0, MAX_PRODUCTS));
+  if (sitemapProductUrls.length > 0) {
+    const products = await productsFromPages(sitemapProductUrls.slice(0, MAX_PRODUCTS));
     return {
       domain,
       origin,
@@ -43,7 +46,9 @@ export async function snapshot(
       hasPath,
       products,
       source: "sitemap",
-      sitemapProductCount: sitemapUrls.length,
+      sitemapProductCount: sitemapProductUrls.length,
+      sitemapUrls: sitemap.observedUrls,
+      sitemapComplete: sitemap.complete,
     };
   }
 
@@ -60,7 +65,9 @@ export async function snapshot(
     hasPath,
     products,
     source: products.length > 0 ? "homepage" : "none",
-    sitemapProductCount: sitemapUrls.length,
+    sitemapProductCount: sitemapProductUrls.length,
+    sitemapUrls: sitemap.observedUrls,
+    sitemapComplete: sitemap.complete,
   };
 }
 
@@ -86,8 +93,11 @@ export function sitemapsDeclaredIn(robotsBody: string, origin: string): string[]
   return out;
 }
 
-async function declaredSitemaps(origin: string): Promise<string[]> {
-  const res = await get(resolve(origin, "/robots.txt"));
+async function declaredSitemaps(
+  origin: string,
+  fetchDocument: (url: string) => Promise<Fetched> = get,
+): Promise<string[]> {
+  const res = await fetchDocument(resolve(origin, "/robots.txt"));
   return res.ok ? sitemapsDeclaredIn(res.body, origin) : [];
 }
 
@@ -96,30 +106,58 @@ export async function productUrlsFromSitemap(
   origin: string,
   override: string,
 ): Promise<string[]> {
+  return (await observeSitemap(origin, override)).productUrls;
+}
+
+export interface SitemapObservation {
+  productUrls: string[];
+  observedUrls: string[];
+  complete: boolean;
+}
+
+export async function observeSitemap(
+  origin: string,
+  override: string,
+  fetchDocument: (url: string) => Promise<Fetched> = get,
+): Promise<SitemapObservation> {
   // An explicit override is the operator speaking; do not second-guess it with
   // robots. Otherwise prefer what the site declares, and guess only last.
   const candidates = override.trim()
     ? [resolve(origin, override.trim())]
-    : [...(await declaredSitemaps(origin)), resolve(origin, "/sitemap.xml")];
+    : [
+        ...(await declaredSitemaps(origin, fetchDocument)),
+        resolve(origin, "/sitemap.xml"),
+      ];
 
-  for (const candidate of candidates) {
-    const found = await productUrlsFrom(candidate);
-    if (found.length > 0) return found;
+  let fallback: SitemapObservation | null = null;
+  for (const candidate of unique(candidates)) {
+    const observation = await observeSitemapAt(candidate, fetchDocument);
+    if (observation.productUrls.length > 0) return observation;
+    if (!fallback && observation.observedUrls.length > 0) fallback = observation;
   }
-  return [];
+  return fallback ?? { productUrls: [], observedUrls: [], complete: false };
 }
 
-/** Product URLs reachable from one sitemap, following an index one level. */
-async function productUrlsFrom(start: string): Promise<string[]> {
-  const root = await get(start);
-  if (!root.ok) return [];
+/** Exact URLs and product candidates reachable from one sitemap. */
+async function observeSitemapAt(
+  start: string,
+  fetchDocument: (url: string) => Promise<Fetched>,
+): Promise<SitemapObservation> {
+  const root = await fetchDocument(start);
+  if (!root.ok) return { productUrls: [], observedUrls: [], complete: false };
 
   const locs = (body: string): string[] =>
     [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
 
   const top = locs(root.body);
-  const direct = top.filter(isProductUrl);
-  if (direct.length > 0) return unique(direct);
+  const linksToChildSitemaps = top.some((url) => /\.xml(?:$|[?#])/i.test(url));
+  if (!/<sitemapindex\b/i.test(root.body) && !linksToChildSitemaps) {
+    return {
+      productUrls: unique(top.filter(isProductUrl)),
+      observedUrls: unique(top),
+      complete: root.truncated !== true,
+    };
+  }
 
   // Sitemap index: fetch the children that look like product sitemaps.
   const children = top
@@ -128,19 +166,29 @@ async function productUrlsFrom(start: string): Promise<string[]> {
     .slice(0, 4);
 
   const found: string[] = [];
+  const products: string[] = [];
+  let complete = root.truncated !== true && children.length === top.length;
   for (const child of children) {
-    const res = await get(child);
+    const res = await fetchDocument(child);
     if (res.ok) {
+      const urls = locs(res.body).filter((url) => !/\.xml$/i.test(url));
+      found.push(...urls);
       // A sitemap the site itself calls "product" is a list of products, so
-      // take it at its word. Bose's are /p/…​.html, which no /products/
-      // pattern would ever match, and filtering would discard all 207.
-      const declared = /product/i.test(child);
-      const urls = locs(res.body).filter((u) => !/\.xml$/i.test(u));
-      found.push(...(declared ? urls : urls.filter(isProductUrl)));
+      // take it at its word even when its page paths are not /products/.
+      products.push(...(/product/i.test(child) ? urls : urls.filter(isProductUrl)));
+      if (res.truncated === true || /<sitemapindex\b/i.test(res.body)) complete = false;
+    } else {
+      complete = false;
     }
     if (found.length > 400) break;
   }
-  return unique(found);
+  if (found.length > 400) complete = false;
+  const observedUrls = unique(found);
+  return {
+    productUrls: unique(products),
+    observedUrls,
+    complete,
+  };
 }
 
 function isProductUrl(url: string): boolean {

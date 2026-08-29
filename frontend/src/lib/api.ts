@@ -12,6 +12,8 @@ import type {
   RunInput,
   Surface,
 } from "./types";
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3201";
@@ -24,6 +26,8 @@ export type StreamMessage =
   | { type: "sessions_closed" }
   | { type: "checks"; checks: Checks }
   | { type: "agent"; event: AgentEvent }
+  | { type: "surface_simulation"; event: SurfaceSimulationEvent }
+  | { type: "check_result"; result: CheckResult }
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
   | { type: "done"; status: "complete" | "error"; error: string | null };
 
@@ -129,6 +133,8 @@ export function subscribeToRun(
     "sessions_closed",
     "checks",
     "agent",
+    "surface_simulation",
+    "check_result",
     "findings",
     "done",
   ]) {

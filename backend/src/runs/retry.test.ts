@@ -40,3 +40,15 @@ test("withTimeout aborts the operation and reports a stable timeout code", async
       error.message === "shopper timed out",
   );
 });
+
+test("withTimeout stops when its parent signal aborts even if work ignores the signal", async () => {
+  const parent = new AbortController();
+  const pending = withTimeout(
+    async () => new Promise<never>(() => undefined),
+    10_000,
+    "child",
+    parent.signal,
+  );
+  parent.abort(new Error("run cancelled"));
+  await assert.rejects(pending, /run cancelled/);
+});

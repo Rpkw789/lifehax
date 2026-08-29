@@ -1,133 +1,114 @@
 # State of the app
 
-Measured on `main` at `dff566b`, not from memory. Reachability is an import
-walk from `backend/src/index.ts`; everything else is a grep or a live request.
+Measured after merging `feature/surface-simulations` on 2026-08-29. This report separates
+behavior verified by recorded tests from behavior that still requires runtime
+credentials and a public store.
 
-Rerun the walk with the snippet at the bottom before trusting these numbers —
-they move every time someone pushes.
+## What works now
 
-The prose goes stale faster than the numbers. The first version of this file
-claimed `fixtures.ts` still carried product-category strings; that was already
-untrue when it was written, because it was carried forward from an earlier grep
-without rechecking. Prefer the script to the paragraphs.
+- The catalogue crawl, site audit, Browser population, findings, persistence,
+  editable personas, and SSE flow remain connected to `backend/src/index.ts`.
+- Check launches three additional read-only simulations against one selected
+  product and one enabled shopper brief while the Browser population runs.
+- Agent protocol fetches the configured ACP convention (default
+  `/.well-known/agent-commerce`) and `/.well-known/ucp`. HTTP 200 alone is not
+  treated as support: HTML soft-404s, malformed JSON, and incomplete UCP
+  profiles settle as unavailable or unsupported. UCP declarations are checked
+  for dated versions, HTTPS specification/schema URLs, and valid transports;
+  ACP convention documents are evaluated against the pinned 2026-04-17
+  snapshot and must contain versioned endpoint material or a complete OpenAPI
+  document with callable operations.
+- Model-readable guide fetches `/llms.txt`, parses its title, summary, sections,
+  links, and direct target coverage, then follows at most three relevant
+  same-origin HTTP links for content assessment. Missing files display “Unable
+  to be found”; retrieval failures display “Unable to verify.” Structural facts
+  include H1 count, summary, section/link counts, target coverage, duplicates,
+  unsafe or off-origin links, and followed-link HTTP failures.
+- Web search runs one shared-search shopper brief without adding the audited
+  brand, domain, or canonical URL to that brief. Citations and fetched pages are
+  matched to the target deterministically; model output never decides discovery,
+  identity, rank, recommendation, or score.
+- When `OPENAI_API_KEY` is configured, all three methods use the OpenAI
+  Responses API directly. Protocol and guide receive bounded model-generated
+  critiques whose points must cite evidence IDs from the same run; Web search
+  uses the hosted `web_search` tool, then a separate structured ranking call.
+  Invalid critiques retry once, then fall back without killing the run.
+- Surface progress uses the shared append-only `SurfaceSimulationEvent`. The run
+  store deduplicates and replays events in sequence order; the frontend performs
+  a second idempotent fold for reconnects.
+- Surface workers are independently capped at 45 seconds, inherit cancellation,
+  retry transient retrieval/model failures once, and suppress late events after
+  settlement. The origin fetcher enforces a 1 MB response cap before evidence
+  excerpts are produced. SSE subscribes before taking its replay snapshot, so
+  events published during replay are queued rather than lost.
+- Sitemap absence is asserted only after complete exact-URL membership
+  observation. Failed, truncated, nested, or deliberately bounded sitemap
+  indexes remain unknown instead of being reported as missing.
+- Check renders the three new methods as plain dark consoles with white text.
+  Lines appear only when backend milestones happen. Each settled console can
+  disclose its relevant report slice, and the page can disclose the complete
+  consolidated `CheckResult`.
+- The consolidated report keeps schema `1.1.0`: protocol and guide results live
+  in `site_audit`, the single Web-search run lives in `agent_runs[0]`, and fetch,
+  extraction, search, and critique evidence lives in `evidence[]`.
 
-## What genuinely works
+## Verification snapshot
 
-Verified against a real run on `allbirds.com`:
+Recorded tests make no network calls.
 
-- **Catalogue crawl** — 12 products from `products.json`, 293 from the sitemap.
-- **Site audit probes** — `agentCommerce=404 ucp=200 llmsTxt=200 sitemap=200`.
-- **Structured-data checks** — `withJsonLd=4 withOfferPrice=4 priceInServedHtml=4 withCartForm=0`.
-- **Surface scores** — `computeSurfaces()` is arithmetic over those probes. No
-  model decides a number.
-- **Three real browser agents** via Browserbase and Stagehand.
-- **SSE streaming** — Input, Check and Recommend all read the live run.
-- **The Evaluate engine** — deterministic rules, contract-validated, 114 tests.
-
-## What does not work, in the order worth fixing
-
-### 1. The LLM is not connected
-
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are one character each in
-the working `.env`, so the gateway returns `401` and `findings.ts` falls back to
-`ruleFindings`. Every finding and persona shown so far is canned. The last real
-run produced **one** finding.
-
-`/health` reports `llm: true` because it only checks the variables are
-non-empty, not that they work.
-
-**Fix:** a real account id and an **AI Gateway token** with the `AI Gateway Run`
-permission, created inside the gateway's Settings. A general Cloudflare API
-token produces exactly this 401. Confirm `CLOUDFLARE_GATEWAY_ID` is the
-gateway's real name.
-
-This is one config change and it is the largest gap between what the product
-claims and what it does.
-
-### 2. Half the backend never executes
-
-**25 of 52 modules, 2,416 lines, unreachable from `index.ts`.** The two new
-modules are `persistence/`, and both are live.
-
-| Area | Dark modules |
-| --- | --- |
-| `agents/` | 8 |
-| `catalogue/` | 5 |
-| `runs/` | 4 |
-| `personas/`, `models/` | 2 each |
-| `audit/`, `score/` | 1 each |
-| root (`env.ts`, `fixtures.ts`) | 2 |
-
-Nothing calls `runSimulation`. The server still imports the older flat files —
-`agents.ts`, `catalogue.ts`, `checks.ts`, `personas.ts`, `findings.ts`.
-
-So there are two of almost everything: two catalogue readers, two persona
-generators, two agent systems, two scoring paths. The dark half is the better
-one — tested, contract-shaped, 20 passing tests — and it is invisible to users.
-
-**This needs a decision, not a fix.** Either wire `runSimulation` in and delete
-the flat files, or shelve the new stack and stop growing it. Carrying both is
-how a hackathon codebase doubles in a day.
-
-### 3. Seven of ten agents are scripted
-
-`agents.ts` says so itself:
-
-> Their failure reasons are pulled from the real audit so the console never
-> states something untrue about the store, but their pass/fail pattern is not a
-> measurement. Do not report them as one.
-
-The last real run makes the gap concrete. Stages cleared per agent:
-
-```
-A01: 1   A02: 4   A03: 4   A04: 1   A05: 4
-A06: 4   A07: 1   A08: 4   A09: 4   A10: 6
+```text
+backend:  176 tests passed, 0 failed; tsc --noEmit passed
+frontend:  12 tests passed, 0 failed; tsc --noEmit passed
+frontend:  next build completed successfully
 ```
 
-`A01`, `A04` and `A07` are the three real Browserbase agents. They cleared
-**one** stage each. The seven that reached stage 4 are scripted. The dashboard
-funnel presents both as measured.
+The surface provider is selected in `index.ts`; existing persona generation and
+written findings remain on Cloudflare. The direct OpenAI key stays server-side
+and is never included in events, evidence, reports, or error messages.
 
-Three is not arbitrary — the Browserbase free tier allows 3 concurrent
-browsers and 5 session requests per minute. Raising `HAPPY2_REAL_AGENTS`
-without pooling more keys trips a `429`.
+## Runtime requirements and graceful degradation
 
-**Options:** pool more keys, or mark scripted agents in the UI. Saying "10
-agents shopped your store" is not currently true.
+The three additional surface simulations use:
 
-### 4. Prototype fixtures still drive the Check screen
+```text
+POST https://api.openai.com/v1/responses
+Authorization: Bearer <OPENAI_API_KEY>
+```
 
-`LivestreamTile.tsx` reads four hardcoded constants from `lib/fixtures.ts`:
+Their model defaults to `gpt-5-mini` and can be changed with
+`HAPPY2_OPENAI_MODEL`. If credentials are missing or a model call fails,
+protocol/guide HTTP evidence still runs, critiques fall back, and Web search
+records `AGENT_ERROR` rather than aborting the overall run. Other model-backed
+workflows retain their existing Cloudflare configuration.
 
-- `TILE_CLIPS` — canned mp4s of Sephora, Shein, Shopee, Footlocker and others.
-  Tiles without a live Browserbase session play stock footage of stores nobody
-  audited.
-- `RING_REGIONS`, `STAGE_PATHS`, `STAGE_ACTIONS` — focus rings, URL bars and
-  action captions, all prototype copy.
+A credential-safe direct structured-output call and hosted Web-search call were
+verified with `gpt-5-mini`; the search-plus-ranking path returned ten bounded
+citations and one candidate in 16.3 seconds. No full public-store run is claimed.
 
-`STAGE_PASS_LOGS` feeds the console the same way.
+## Known limitations that remain
 
-`STAGE_PATHS` replaced the older `STAGE_URLS` and is now generic — `/search`,
-`/products/…`, `/cart` — so the tiles no longer invent a product category. The
-only category words left in the repo are in a comment in
-`backend/src/personas.ts` explaining the rule, which is where they belong.
-
-### 5. The Evaluate endpoint is unreachable by clicking
-
-`POST /runs/:id/evaluate` works and is tested, but no screen calls it. Recommend
-uses findings from the SSE stream instead. The lane is reachable by `curl` only.
-
-That is a consequence of item 2 — Evaluate consumes a `CheckResult`, which only
-the dark pipeline produces.
+1. The existing Browser population still mixes real Browserbase sessions with
+   scripted agents according to account quota. This change deliberately leaves
+   `LivestreamTile`, Browser `AgentEvent`, stage board, funnel, recommendations,
+   and dashboard behavior untouched.
+2. Prototype Browser tile clips and stage captions remain in the legacy UI.
+3. `POST /runs/:id/evaluate` remains API-only; the Recommend screen still uses
+   findings from the legacy SSE lane.
+4. Finished runs persist to Postgres, or local SQLite when no database URL is
+   configured, but no re-run or hosted-artifact loop exists yet.
+5. `CheckResult` is published for the new three-method assessment, but the
+   Evaluate endpoint is not automatically invoked with it.
 
 ## Live endpoints
 
-```
+```text
 GET  /health
 POST /runs
 GET  /runs                 run history, newest first
 GET  /runs/:id             memory, falling back to the database
-GET  /runs/:id/events      SSE
+GET  /runs/:id/events      SSE, including surface_simulation and check_result
+GET  /stores/:host/personas
+PUT  /stores/:host/personas
 POST /runs/:id/evaluate    works, unused by the UI
 ```
 
@@ -152,44 +133,15 @@ Still missing: re-run, and artifact hosting. The self-verifying loop in
 - **`Export findings` does something** — Markdown for a person, JSON for a
   machine.
 
-## Decisions this needs
+## Remaining dark modules
 
-1. **Who fixes the Cloudflare credentials, and when.** Everything else is
-   cosmetic next to it.
-2. **Does `runSimulation` replace `runPopulation` before the demo?** If yes,
-   wire it and delete the flat files. If no, stop adding to `agents/`,
-   `catalogue/`, `runs/`.
-3. **How do we describe the agent population?** Three real, or pool keys for
-   more, or label the scripted ones.
-4. **Do the tile clips stay?** They demo well and they are footage of other
-   people's stores.
-
-## Rerunning the reachability walk
-
-```sh
-cd backend && python3 - <<'PY'
-import os, re, pathlib
-root = pathlib.Path("src")
-files = {str(p) for p in root.rglob("*.ts") if ".test." not in p.name}
-def imports(p):
-    out = set()
-    for m in re.finditer(r'from\s+"(\./[^"]+|\.\./[^"]+)"', pathlib.Path(p).read_text()):
-        b = os.path.normpath(os.path.join(os.path.dirname(p), m.group(1).replace(".ts", "")))
-        for c in (b + ".ts", os.path.join(b, "index.ts")):
-            if c in files:
-                out.add(c)
-                break
-    return out
-seen, stack = set(), ["src/index.ts"]
-while stack:
-    f = stack.pop()
-    if f in seen or f not in files:
-        continue
-    seen.add(f)
-    stack.extend(imports(f))
-dark = sorted(files - seen)
-print(f"live={len(seen)} dark={len(dark)}")
-for f in dark:
-    print(" ", f)
-PY
+```text
+src/agents/native-client.ts
+src/agents/native-search.ts
+src/env.ts
+src/fixtures.ts
+src/models/anthropic.ts
+src/runs/orchestrator.ts
+src/runs/queue.ts
+src/runs/services.ts
 ```
