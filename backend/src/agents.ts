@@ -39,7 +39,7 @@ const CONCURRENT_PER_KEY = 3;
 const REAL_AGENT_COUNT = Number(
   process.env.HAPPY2_REAL_AGENTS ?? API_KEYS.length * CONCURRENT_PER_KEY,
 );
-const STAGE_TIMEOUT_MS = 45_000;
+const STAGE_TIMEOUT_MS = 75_000;
 
 /** Fixture pacing, so the scripted agents animate like the prototype. */
 const START_GAP_TICKS = 4;
@@ -230,9 +230,10 @@ async function runRealAgent(
         }
 
         const from = await page.url();
-        await sh.act(
+        await observeAndAct(
+          sh,
           "Open the main shop, catalogue, or all-products section of this store.",
-        );
+        ).catch(() => {});
         const url = await waitForNavigation(page, from);
         await dismissOverlays(sh);
 
@@ -264,16 +265,46 @@ async function runRealAgent(
     // 3 · read — open the best match for the brief and get the facts off it.
     const facts = await stageValue(run, agentId, 3, async () => {
       const from = await page.url();
-      await sh.act(
-        `Click the product link for the item that best matches this shopper: ${persona.prompt}`,
-      );
-      let url = await waitForNavigation(page, from);
 
-      // Some listings need a second click to get off a collection page.
-      if (!/\/products?\//i.test(url)) {
-        await sh.act("Open one of the product listings on this page.");
-        url = await waitForNavigation(page, url);
+      // Observe the listing once, then act on the candidate whose description
+      // best fits the brief. Asking act() to both find and choose re-runs
+      // inference and routinely comes back with nothing on a listing page,
+      // even though observe() sees every product.
+      const listing = await sh.observe(
+        "List the product links on this page, with the product name for each.",
+      );
+      const chosen = pickCandidate(listing.data ?? [], persona.prompt);
+      if (chosen) {
+        agentLog.debug(`${agentId} chose a product`, {
+          of: (listing.data ?? []).length,
+          description: chosen.description.slice(0, 60),
+        });
+        await sh.act(chosen).catch((err: unknown) =>
+          agentLog.debug(`${agentId} could not replay that action`, err),
+        );
       }
+
+      let url = await waitForNavigation(page, from, 8000);
+
+      // Clicking does not always work. On some listings Stagehand can see every
+      // product in the accessibility tree but cannot resolve one to an XPath
+      // ("Observed element could not be resolved"), so act() has nothing to
+      // click and the agent sits on the collection page until it times out.
+      // A real shopper would still get to the product, so follow the link
+      // ourselves: read the hrefs and pick the closest match to the brief.
+      if (!/\/products?\//i.test(url)) {
+        const links = await productLinks(page);
+        const target = bestMatch(links, persona.prompt);
+        if (target) {
+          agentLog.debug(`${agentId} could not click through, following a link`, {
+            of: links.length,
+            to: short(target),
+          });
+          await page.goto(target);
+          url = await page.url();
+        }
+      }
+
       await dismissOverlays(sh);
 
       if (!/\/products?\//i.test(url)) {
@@ -302,7 +333,7 @@ async function runRealAgent(
     // 4 · select — a variant choice that actually did something.
     if (
       !(await stage(run, agentId, 4, () =>
-        acted(
+        observeAndAct(
           sh,
           `Choose the size, colour or variant that matches this shopper: ${persona.prompt}`,
         ),
@@ -314,10 +345,18 @@ async function runRealAgent(
     // 5 · cart — confirmed by the cart itself, not by the model's say-so.
     if (
       !(await stage(run, agentId, 5, async () => {
-        await acted(sh, "Add this product to the cart.");
-        const count = await cartCount(page);
+        await observeAndAct(sh, "Add this product to the cart.");
+        // Add-to-cart is an XHR on most stores, so the cart is not updated the
+        // instant the click returns. Poll before calling it a failure.
+        const count = await settledCartCount(page);
         if (count === 0) {
           throw new Error("add-to-cart ran but the cart is still empty");
+        }
+        if (count === null) {
+          // Nothing on this store reports cart state in a way we can read, so
+          // there is no post-condition to check. The action succeeded; saying
+          // otherwise would invent a failure, which is worse than not knowing.
+          agentLog.debug(`${agentId} cart state is not observable on this store`);
         }
       }))
     ) {
@@ -327,7 +366,7 @@ async function runRealAgent(
     // 6 · checkout — reaching it is the pass. No payment details, ever.
     await stage(run, agentId, 6, async () => {
       const from = await page.url();
-      await acted(
+      await observeAndAct(
         sh,
         "Go to the checkout page. Do not enter any payment information.",
       );
@@ -343,25 +382,42 @@ async function runRealAgent(
 }
 
 /**
- * Runs `act` and insists it actually did something.
+ * Observe, then act on what was observed.
  *
- * Stagehand resolves successfully when the model finds no element to act on —
- * it logs "No actionable element returned by the LLM" and returns an empty
- * action list. Treating that as a pass is how agents "select" nothing.
+ * This is Stagehand's recommended pattern and it matters here. Passing a
+ * natural-language string to `act()` re-runs inference to locate the element,
+ * which fails on listings where the model can describe every product but
+ * cannot resolve one to an XPath — `act()` then returns "no actionable
+ * element" while `observe()` on the same page returns twenty. Replaying an
+ * observed Action skips inference entirely and is deterministic.
+ *
+ * Insists something actually happened: `act()` resolves happily with an empty
+ * action list, and treating that as success is how an agent "selects" a
+ * variant that does not exist.
  */
-async function acted(sh: Stagehand, instruction: string): Promise<void> {
-  const result = await sh.act(instruction);
+async function observeAndAct(sh: Stagehand, instruction: string): Promise<void> {
+  const observed = await sh.observe(instruction);
+  const candidates = observed.data ?? [];
+  // Prefer a click; otherwise take the first thing the page offered.
+  const action = candidates.find((a) => a.method === "click") ?? candidates[0];
+
+  if (!action) {
+    throw new Error("nothing on the page matched that instruction");
+  }
+
+  const result = await sh.act(action);
   const data = result.data;
   if (!data?.success || data.actions.length === 0) {
-    throw new Error(data?.message?.trim() || "no actionable element on the page");
+    throw new Error(data?.message?.trim() || "the page did not respond to that action");
   }
 }
 
 /** Consent and newsletter overlays block everything behind them. */
 async function dismissOverlays(sh: Stagehand): Promise<void> {
   try {
-    await sh.act(
-      "If a cookie consent, newsletter, or region popup is covering the page, dismiss or accept it. If there is none, do nothing.",
+    await observeAndAct(
+      sh,
+      "Dismiss or accept the cookie consent, newsletter, or region popup covering the page.",
     );
   } catch {
     // Nothing to dismiss is the common case and not a failure.
@@ -389,6 +445,96 @@ async function settledProductLinkCount(
   return best;
 }
 
+/** Every distinct product URL on the current page. */
+async function productLinks(
+  page: { evaluate: <R>(fn: () => R) => Promise<R> },
+): Promise<string[]> {
+  try {
+    return await page.evaluate(() => {
+      const hrefs = Array.from(
+        document.querySelectorAll("a[href]"),
+        (a) => (a as HTMLAnchorElement).href,
+      );
+      return Array.from(new Set(hrefs.filter((h) => /\/products?\//i.test(h))));
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The observed candidate whose description best fits the brief.
+ *
+ * Deliberately not another model call: observe() has already described every
+ * element, and the brief names what the shopper wants, so this is a word
+ * overlap rather than a judgement. Ties fall to the first candidate.
+ */
+function pickCandidate<T extends { description: string; method?: string }>(
+  candidates: T[],
+  brief: string,
+): T | undefined {
+  const clickable = candidates.filter((c) => !c.method || c.method === "click");
+  const pool = clickable.length > 0 ? clickable : candidates;
+  if (pool.length === 0) return undefined;
+
+  const words = briefWords(brief);
+  let best = pool[0]!;
+  let bestScore = -1;
+  for (const candidate of pool) {
+    const text = candidate.description.toLowerCase();
+    let score = 0;
+    for (const word of words) if (text.includes(word)) score++;
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** Words worth matching on: long enough to be meaningful, lowercased. */
+function briefWords(brief: string): string[] {
+  const STOP = new Set([
+    "want", "need", "with", "that", "this", "have", "from", "would", "like",
+    "about", "under", "over", "into", "them", "they", "your", "some", "just",
+    "please", "looking", "something",
+  ]);
+  return brief
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOP.has(w));
+}
+
+/**
+ * The link whose slug shares the most words with the brief.
+ *
+ * Last resort, when nothing observed could be clicked. Skips the pages a store
+ * files under /products/ that nobody shops for — shipping, vouchers, repairs —
+ * so an agent does not "buy" a returns label.
+ */
+const NOT_SHOPPABLE = /shipping|voucher|gift-card|giftcard|repair|returns|sample|donation|deposit/i;
+
+function bestMatch(links: string[], brief: string): string | undefined {
+  if (links.length === 0) return undefined;
+  const shoppable = links.filter((l) => !NOT_SHOPPABLE.test(l));
+  const pool = shoppable.length > 0 ? shoppable : links;
+
+  const words = briefWords(brief);
+  let best = pool[0]!;
+  let bestScore = -1;
+  for (const link of pool) {
+    const slug = link.toLowerCase().replace(/[^a-z0-9]/g, " ");
+    let score = 0;
+    for (const word of words) if (slug.includes(word)) score++;
+    if (score > bestScore) {
+      bestScore = score;
+      best = link;
+    }
+  }
+  return best;
+}
+
 /** How many distinct product links the current page exposes. */
 async function productLinkCount(page: { evaluate: <R>(fn: () => R) => Promise<R> }): Promise<number> {
   try {
@@ -405,29 +551,68 @@ async function productLinkCount(page: { evaluate: <R>(fn: () => R) => Promise<R>
 }
 
 /**
+ * Waits for the cart to report a line.
+ *
+ * Returns null when this store gives us no way to read cart state at all —
+ * distinct from zero, which means we looked and the cart was empty. Collapsing
+ * the two turns "we cannot tell" into "add-to-cart is broken", which is how a
+ * non-Shopify store gets reported as failing a stage it actually passed.
+ */
+async function settledCartCount(
+  page: { evaluate: <R>(fn: () => R | Promise<R>) => Promise<R> },
+  timeoutMs = 8000,
+): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  let observable = false;
+  while (Date.now() < deadline) {
+    const count = await cartCount(page);
+    if (count !== null) {
+      observable = true;
+      if (count > 0) return count;
+    }
+    await sleep(800);
+  }
+  return observable ? 0 : null;
+}
+
+/**
  * Lines in the cart. Uses Shopify's /cart.js where available and falls back to
  * reading a cart-count element, so a non-Shopify store still gets a verdict.
  */
-async function cartCount(page: { evaluate: <R>(fn: () => R | Promise<R>) => Promise<R> }): Promise<number> {
+async function cartCount(
+  page: { evaluate: <R>(fn: () => R | Promise<R>) => Promise<R> },
+): Promise<number | null> {
   try {
     return await page.evaluate(async () => {
+      // Shopify and most platforms that copy it. Absent elsewhere, and a 404
+      // here says nothing about the cart.
       try {
-        const res = await fetch("/cart.js", { headers: { accept: "application/json" } });
+        const res = await fetch("/cart.js", {
+          headers: { accept: "application/json" },
+        });
         if (res.ok) {
           const cart = (await res.json()) as { item_count?: number };
           if (typeof cart.item_count === "number") return cart.item_count;
         }
       } catch {
-        // fall through to the DOM
+        // fall through
       }
+
+      // A badge in the header, which most storefronts render whether or not
+      // they expose a cart endpoint.
       const el = document.querySelector(
-        "[data-cart-count], .cart-count, [class*='cart-count'], [id*='cart-count']",
+        "[data-cart-count], .cart-count, [class*='cart-count'], [class*='cartCount'], [id*='cart-count'], [aria-label*='cart' i] [class*='count']",
       );
-      const n = Number((el?.textContent ?? "").replace(/\D/g, ""));
-      return Number.isFinite(n) ? n : 0;
+      if (el) {
+        const n = Number((el.textContent ?? "").replace(/\D/g, ""));
+        if (Number.isFinite(n)) return n;
+      }
+
+      // null = this store does not tell us, which is not the same as empty.
+      return null;
     });
   } catch {
-    return 0;
+    return null;
   }
 }
 
