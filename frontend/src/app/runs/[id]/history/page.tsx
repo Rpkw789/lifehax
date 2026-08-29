@@ -1,84 +1,113 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
+import { listRuns } from "@/lib/api";
+import type { RunSummary } from "@/lib/history";
 import { useRun } from "@/lib/run-context";
 import styles from "../sections.module.css";
 
 /**
  * Past runs.
  *
- * There is no run store behind this yet — the backend keeps a run for the life
- * of the process and nothing writes a history. So every row below the current
- * one is invented, the screen says so, and the hosts are `.example` rather than
- * anything that could be mistaken for a real store.
- *
- * When a run store lands, this reads it and the constant goes away.
+ * Reads the run store the backend now keeps, so these are real audits rather
+ * than a placeholder list — newest first, each one openable. A run that errored
+ * measured nothing, so it is shown with its status rather than a hit count that
+ * would imply it produced one.
  */
-interface PastRun {
-  id: string;
-  when: string;
-  store: string;
-  agents: number;
-  hitRate: string;
-  findings: number;
-}
-
-const PAST_RUNS: readonly PastRun[] = [
-  { id: "2041", when: "27 Aug 14:02", store: "northbay.example", agents: 10, hitRate: "40%", findings: 6 },
-  { id: "2038", when: "26 Aug 09:41", store: "atlas-supply.example", agents: 10, hitRate: "20%", findings: 9 },
-  { id: "2035", when: "22 Aug 16:20", store: "northbay.example", agents: 10, hitRate: "10%", findings: 11 },
-  { id: "2030", when: "19 Aug 11:07", store: "verity-goods.example", agents: 6, hitRate: "50%", findings: 4 },
-];
-
 export default function HistoryScreen() {
-  const { runId, storeHost, agents, complete } = useRun();
+  const { runId } = useRun();
+  const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const won = agents.filter((a) => a.ok).length;
-  const currentHitRate = complete
-    ? `${Math.round((won / Math.max(1, agents.length)) * 100)}%`
-    : "—";
+  useEffect(() => {
+    let live = true;
+    listRuns()
+      .then((result) => {
+        if (live) setRuns(result);
+      })
+      .catch((err: unknown) => {
+        if (live) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <div className={styles.screen}>
       <div className={styles.note}>
-        The current run, then earlier audits on this workspace.
-        <span className={styles.sim}>mock data</span>
+        {error
+          ? `Could not reach the backend — ${error}`
+          : runs === null
+            ? "Loading runs…"
+            : `${runs.length} ${runs.length === 1 ? "run" : "runs"} on this workspace`}
       </div>
 
-      <div className={styles.list}>
-        <div className={`${styles.runRow} ${styles.runRowHead}`}>
-          <span className={styles.headCell}>When</span>
-          <span className={styles.headCell}>Store</span>
-          <span className={styles.headCell}>Agents</span>
-          <span className={styles.headCell}>Hit rate</span>
-          <span className={styles.headCell}>Findings</span>
-        </div>
-
-        <Link
-          className={`${styles.runRow} ${styles.runRowCurrent}`}
-          href={`/runs/${runId}/check`}
-        >
-          <span className={styles.runWhen}>now</span>
-          <span className={styles.runStore}>{storeHost}</span>
-          <span className={styles.runFigure}>{agents.length}</span>
-          <span className={styles.runFigure}>{currentHitRate}</span>
-          <span className={styles.runBadge}>
-            {complete ? "complete" : "this run"}
-          </span>
-        </Link>
-
-        {/* Not links: there is nothing behind them to open. */}
-        {PAST_RUNS.map((run) => (
-          <div key={run.id} className={styles.runRow}>
-            <span className={styles.runWhen}>{run.when}</span>
-            <span className={styles.runStore}>{run.store}</span>
-            <span className={styles.runFigure}>{run.agents}</span>
-            <span className={styles.runFigure}>{run.hitRate}</span>
-            <span className={styles.runFigure}>{run.findings}</span>
+      {runs !== null && runs.length > 0 && (
+        <div className={styles.list}>
+          <div className={`${styles.runRow} ${styles.runRowHead}`}>
+            <span className={styles.headCell}>Started</span>
+            <span className={styles.headCell}>Store</span>
+            <span className={styles.headCell}>Findings</span>
+            <span className={styles.headCell}>Blocked</span>
+            <span className={styles.headCell}>Status</span>
           </div>
-        ))}
-      </div>
+
+          {runs.map((run) => (
+            <Link
+              key={run.runId}
+              className={`${styles.runRow} ${
+                run.runId === runId ? styles.runRowCurrent : ""
+              }`}
+              href={`/runs/${run.runId}/dashboard`}
+            >
+              <span className={styles.runWhen}>{when(run.createdAt)}</span>
+              <span className={styles.runStore}>{host(run.storeUrl)}</span>
+              <span className={styles.runFigure}>{run.findings}</span>
+              <span className={styles.runFigure}>{run.blocked}</span>
+              <span
+                className={
+                  run.runId === runId ? styles.runBadge : styles.runFigure
+                }
+              >
+                {run.runId === runId ? "this run" : run.status}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {runs !== null && runs.length === 0 && (
+        <div className={styles.card}>
+          <div className={styles.capNote}>
+            No runs saved yet. Finish one and it will appear here.
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/** `27 Aug 14:02`, or the raw value if it will not parse. */
+function when(createdAt: string): string {
+  const at = new Date(createdAt);
+  if (Number.isNaN(at.getTime())) return createdAt;
+  return at.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Host only, so the column stays readable. */
+function host(storeUrl: string): string {
+  const raw = storeUrl.trim();
+  try {
+    return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).host;
+  } catch {
+    return raw;
+  }
 }

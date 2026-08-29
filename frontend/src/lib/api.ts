@@ -2,6 +2,7 @@
  * Backend client. One place that knows the API shape, so the screens do not.
  */
 
+import type { RunSummary } from "./history";
 import type {
   AgentEvent,
   Checks,
@@ -25,26 +26,18 @@ export type StreamMessage =
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
   | { type: "done"; status: "complete" | "error"; error: string | null };
 
-/** What the backend reports it picked up. Mirrors `GET /health`. */
-export interface Health {
-  ok: boolean;
-  /** A model gateway is configured. Findings are written rather than rule-based. */
-  llm: boolean;
-  /** A Browserbase key is configured. Agents can really drive a browser. */
-  browserbase: boolean;
-}
-
-/**
- * Reads the backend's capability report.
- *
- * This says whether the variables are *set*, not whether they *work* — the
- * README is explicit about that, and Settings repeats it rather than implying
- * a green light means a working key.
- */
-export async function fetchHealth(): Promise<Health> {
-  const res = await fetch(`${API_BASE}/health`);
-  if (!res.ok) throw new Error(`backend returned ${res.status}`);
-  return (await res.json()) as Health;
+/** Saved runs, newest first. Used by the dashboard to compare iterations. */
+export async function listRuns(): Promise<RunSummary[]> {
+  const res = await fetch(`${API_BASE}/runs`);
+  const body = (await res.json()) as
+    | { runs: RunSummary[] }
+    | { error: { message: string } };
+  if (!res.ok || !("runs" in body)) {
+    throw new Error(
+      "error" in body ? body.error.message : `backend returned ${res.status}`,
+    );
+  }
+  return body.runs;
 }
 
 export async function createRun(input: RunInput): Promise<string> {
