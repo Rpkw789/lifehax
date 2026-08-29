@@ -54,9 +54,11 @@ export function LivestreamTile({
   const [clipFailed, setClipFailed] = useState(false);
   const source = clipFailed || !clip ? undefined : `/tiles/${clip}.mp4`;
 
-  // Sessions are now held open for the whole run, so the live view stays valid
-  // after an individual agent settles — no need to drop it early.
-  const showLiveView = Boolean(liveViewUrl);
+  // Sessions are held open for the whole run so other tiles keep a valid live
+  // view, but a settled agent has nothing left to show: its browser is idle on
+  // whatever page it stopped at. Streaming that reads as activity it is not
+  // doing, so the tile switches to its outcome instead.
+  const showLiveView = Boolean(liveViewUrl) && !agent.settled;
 
   const color = agent.persona.color;
   const stageIndex = Math.max(0, Math.min(5, agent.progress));
@@ -117,7 +119,13 @@ export function LivestreamTile({
       </div>
 
       <div className={styles.viewport}>
-        {booting && !showLiveView ? (
+        {agent.settled ? (
+          <SettledState
+            outcome={agent.ok ? "reached checkout" : "blocked"}
+            reason={agent.blocked ? agent.reason : undefined}
+            path={path}
+          />
+        ) : booting && !showLiveView ? (
           <BootState color={color} agentId={agent.id} />
         ) : showLiveView ? (
           <iframe
@@ -181,7 +189,7 @@ export function LivestreamTile({
         />
 
         <div className={styles.caption}>
-          {booting && !showLiveView ? bootCaption : caption}
+          {agent.settled ? caption : booting && !showLiveView ? bootCaption : caption}
         </div>
       </div>
 
@@ -225,6 +233,29 @@ const BOOT_PHASES = [
  * the brief's color, so this reads as part of the system rather than a spinner
  * borrowed from somewhere else.
  */
+/**
+ * What a tile shows once its agent stops. Deliberately still: the run is over
+ * for this agent, and a moving frame would suggest otherwise.
+ */
+function SettledState({
+  outcome,
+  reason,
+  path,
+}: {
+  outcome: string;
+  reason?: string;
+  path?: string;
+}) {
+  return (
+    <div className={styles.settled}>
+      <div className={`${styles.bootGrid}`} />
+      <span className={styles.settledOutcome}>{outcome}</span>
+      {reason ? <span className={styles.settledReason}>{reason}</span> : null}
+      {path ? <span className={styles.settledPath}>{path}</span> : null}
+    </div>
+  );
+}
+
 function BootState({ color, agentId }: { color: string; agentId: string }) {
   const [phase, setPhase] = useState(0);
 
