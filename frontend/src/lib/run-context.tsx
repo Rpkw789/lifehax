@@ -300,7 +300,16 @@ export function RunProvider({
 }
 
 export function useRun(): RunContextValue {
-  const value = useContext(RunContext);
+  const value = useRunOptional();
   if (!value) throw new Error("useRun must be used inside a RunProvider");
   return value;
+}
+
+/**
+ * For the handful of components that render both inside and outside a run —
+ * the sidebar, which the settings screen shows with no run in scope. Anything
+ * that genuinely needs a run should keep using `useRun` and get the throw.
+ */
+export function useRunOptional(): RunContextValue | null {
+  return useContext(RunContext);
 }

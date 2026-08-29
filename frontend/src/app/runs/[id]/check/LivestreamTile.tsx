@@ -118,7 +118,10 @@ export function LivestreamTile({
         </span>
       </div>
 
-      <div className={styles.viewport}>
+      {/* A light island: this box shows the storefront as the agent saw it —
+          a live view, a capture, or the skeleton — so it keeps the light
+          palette even in dark mode. See globals.css. */}
+      <div className={styles.viewport} data-surface="page-preview">
         {agent.settled ? (
           <SettledState
             outcome={agent.ok ? "reached checkout" : "blocked"}

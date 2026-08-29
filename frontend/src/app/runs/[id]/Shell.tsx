@@ -2,11 +2,10 @@
 
 import { useSelectedLayoutSegment } from "next/navigation";
 
+import { AppFrame } from "@/components/AppFrame";
 import { Header } from "@/components/Header";
-import { Sidebar } from "@/components/Sidebar";
 import { Stepper } from "@/components/Stepper";
 import { STEP_ORDER, type StepKey } from "@/lib/run-context";
-import styles from "./Shell.module.css";
 
 /**
  * The shell: three fixed regions plus the routed screen.
@@ -22,13 +21,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     : "input";
 
   return (
-    <div className={styles.shell}>
-      <Sidebar />
-      <div className={styles.main}>
-        <Header step={step} />
-        <Stepper step={step} />
-        {children}
-      </div>
-    </div>
+    <AppFrame>
+      <Header step={step} />
+      <Stepper step={step} />
+      {children}
+    </AppFrame>
   );
 }

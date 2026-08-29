@@ -59,7 +59,7 @@
 .chipBlocked {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* Fake URL bar */

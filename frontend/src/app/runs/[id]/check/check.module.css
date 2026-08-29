@@ -337,6 +337,9 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Not --on-ink: the background here is the persona's own accent colour, set
+   inline, not the --ink ground. White holds against every accent in both
+   themes, so it stays a literal. */
 .logBadge {
   color: #fff;
   border-radius: 3px;

@@ -1,6 +1,9 @@
 "use client";
 
-import { useRun } from "@/lib/run-context";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { useRunOptional } from "@/lib/run-context";
 import styles from "./Sidebar.module.css";
 
 /** All icons are inline SVG at 16px, stroke-width 1.4, fill none, currentColor. */
@@ -26,12 +29,41 @@ const ICONS = {
   ),
 } as const;
 
-const NAV: { label: string; icon: keyof typeof ICONS; active: boolean }[] = [
-  { label: "Readiness audit", icon: "audit", active: true },
-  { label: "Past runs", icon: "runs", active: false },
-  { label: "Agent personas", icon: "personas", active: false },
-  { label: "Settings", icon: "settings", active: false },
-];
+interface NavItem {
+  label: string;
+  icon: keyof typeof ICONS;
+  /** Absent for the screens that do not exist yet; those rows stay inert. */
+  href?: string;
+  /**
+   * Whether this row owns the current URL. A predicate rather than an
+   * equality check because the audit row covers all four screens of a run.
+   */
+  owns?: (pathname: string) => boolean;
+}
+
+/**
+ * `runId` is what lets the audit row point somewhere. The settings screen is
+ * outside any run, so from there the row has no run to go back to and falls
+ * back to inert — the same state the unbuilt screens are in.
+ */
+function navItems(runId: string | null): NavItem[] {
+  return [
+    {
+      label: "Readiness audit",
+      icon: "audit",
+      href: runId ? `/runs/${runId}/input` : undefined,
+      owns: (pathname) => pathname.startsWith("/runs/"),
+    },
+    { label: "Past runs", icon: "runs" },
+    { label: "Agent personas", icon: "personas" },
+    {
+      label: "Settings",
+      icon: "settings",
+      href: "/settings",
+      owns: (pathname) => pathname === "/settings",
+    },
+  ];
+}
 
 function Icon({ name }: { name: keyof typeof ICONS }) {
   return (
@@ -51,7 +83,10 @@ function Icon({ name }: { name: keyof typeof ICONS }) {
 }
 
 export function Sidebar() {
-  const { storeHost } = useRun();
+  // Optional, not required: the settings screen renders the sidebar with no
+  // run in scope.
+  const run = useRunOptional();
+  const pathname = usePathname();
 
   return (
     <div className={styles.sidebar}>
@@ -63,27 +98,48 @@ export function Sidebar() {
 
       <nav className={styles.nav}>
         <div className={styles.sectionLabel}>Workspace</div>
-        {NAV.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={
-              item.active ? `${styles.row} ${styles.rowActive}` : styles.row
-            }
-            aria-current={item.active ? "page" : undefined}
-          >
-            <Icon name={item.icon} />
-            {item.label}
-          </button>
-        ))}
+        {navItems(run?.runId ?? null).map((item) => {
+          const active = item.owns?.(pathname) ?? false;
+          const className = active
+            ? `${styles.row} ${styles.rowActive}`
+            : styles.row;
+
+          if (!item.href) {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={className}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon name={item.icon} />
+                {item.label}
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={className}
+              aria-current={active ? "page" : undefined}
+            >
+              <Icon name={item.icon} />
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
-      <div className={styles.footer}>
-        <div className={styles.storeCard}>
-          <div className={styles.storeLabel}>Store</div>
-          <div className={styles.storeHost}>{storeHost}</div>
+      {run && (
+        <div className={styles.footer}>
+          <div className={styles.storeCard}>
+            <div className={styles.storeLabel}>Store</div>
+            <div className={styles.storeHost}>{run.storeHost}</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
