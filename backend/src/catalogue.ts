@@ -53,15 +53,27 @@ export async function snapshot(
   const home = await get(entryUrl);
   const linked = productLinksFromHtml(home.body, origin).slice(0, MAX_PRODUCTS);
   const products = await productsFromPages(linked);
+
+  // A store that refuses non-browser clients has not hidden its catalogue, it
+  // has closed the door — and every AI shopping agent meets the same door. That
+  // is a finding about the store, not a crawler failure, so it is recorded as
+  // its own source rather than folded into an empty "none".
+  const blocked = products.length === 0 && isBlocking(home.status);
   return {
     domain,
     origin,
     entryUrl,
     hasPath,
     products,
-    source: products.length > 0 ? "homepage" : "none",
+    source: products.length > 0 ? "homepage" : blocked ? "blocked" : "none",
+    blockedStatus: blocked ? home.status : null,
     sitemapProductCount: sitemapUrls.length,
   };
+}
+
+/** Statuses a bot wall answers with, as opposed to a page simply being gone. */
+function isBlocking(status: number | null): boolean {
+  return status === 401 || status === 403 || status === 429;
 }
 
 /**
@@ -91,7 +103,13 @@ async function declaredSitemaps(origin: string): Promise<string[]> {
   return res.ok ? sitemapsDeclaredIn(res.body, origin) : [];
 }
 
-/** Follows a sitemap index one level down. Returns product-looking URLs. */
+/**
+ * Follows a sitemap index down. Returns product-looking URLs.
+ *
+ * The declared order is not a ranking — a store may list its help pages first
+ * and its catalogue last — so a sitemap that names itself for products is
+ * tried before one that merely came first in robots.txt.
+ */
 export async function productUrlsFromSitemap(
   origin: string,
   override: string,
@@ -100,7 +118,10 @@ export async function productUrlsFromSitemap(
   // robots. Otherwise prefer what the site declares, and guess only last.
   const candidates = override.trim()
     ? [resolve(origin, override.trim())]
-    : [...(await declaredSitemaps(origin)), resolve(origin, "/sitemap.xml")];
+    : productNamedFirst([
+        ...(await declaredSitemaps(origin)),
+        resolve(origin, "/sitemap.xml"),
+      ]);
 
   for (const candidate of candidates) {
     const found = await productUrlsFrom(candidate);
@@ -109,42 +130,117 @@ export async function productUrlsFromSitemap(
   return [];
 }
 
-/** Product URLs reachable from one sitemap, following an index one level. */
-async function productUrlsFrom(start: string): Promise<string[]> {
-  const root = await get(start);
-  if (!root.ok) return [];
+/** Stable partition: sitemaps naming products first, everything else after. */
+function productNamedFirst(urls: string[]): string[] {
+  const named = urls.filter((u) => PRODUCT_SITEMAP_NAME.test(fileName(u)));
+  return [...named, ...urls.filter((u) => !named.includes(u))];
+}
 
-  const locs = (body: string): string[] =>
-    [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
+/** How deep an index may nest before we stop. Two covers every store seen. */
+const MAX_SITEMAP_DEPTH = 2;
+/** Children to open per index. Enough for a catalogue, cheap for a big store. */
+const MAX_SITEMAP_CHILDREN = 4;
+/** An index this small is worth opening blind; a large one needs a reason. */
+const SMALL_INDEX = 5;
+const MAX_SITEMAP_URLS = 400;
 
-  const top = locs(root.body);
-  const direct = top.filter(isProductUrl);
+/**
+ * A sitemap file name that says its contents are products.
+ *
+ * Stores spell this more ways than `product`: Nike and Best Buy say `pdp`,
+ * IKEA says `prod`, others say `item` or `sku`. Matching whole tokens rather
+ * than substrings keeps `production` out while letting
+ * `sitemap-v2-pdp-index.xml` in — 3,726 product URLs that a literal `product`
+ * match discards.
+ */
+const PRODUCT_SITEMAP_NAME = /(^|[^a-z])(products?|pdps?|prod|items?|skus?)([^a-z]|$)/i;
+
+/** Path segments a store puts directly above a product's slug. */
+const PRODUCT_PATH_SEGMENTS = new Set([
+  "p", "pd", "pdp", "prd", "prod", "product", "products",
+  "ip", "dp", "gp", "item", "items", "sku", "site", "t",
+]);
+
+/** A product id standing in for the segment name, e.g. `…/trousers/p5966220`. */
+const PRODUCT_ID_SEGMENT = /^(p-?\d{3,}|\d{4,}\.p)$/i;
+
+const SITEMAP_FILE = /\.(xml|xml\.gz|gz)$/i;
+
+/**
+ * Product URLs reachable from one sitemap, following indexes down.
+ *
+ * `trusted` means an ancestor named itself a product sitemap. That has to
+ * travel downward because plenty of stores label only the index: Target's
+ * `sitemap_pdp-index.xml.gz` lists children called `sitemap_00-0001.xml.gz`,
+ * which say nothing about themselves. Inside a trusted sitemap every leaf is a
+ * product, whatever its URL looks like.
+ */
+async function productUrlsFrom(
+  start: string,
+  depth = 0,
+  trusted = false,
+): Promise<string[]> {
+  const res = await get(start, { maxBytes: 16_000_000 });
+  if (!res.ok) return [];
+
+  const declared = trusted || PRODUCT_SITEMAP_NAME.test(fileName(start));
+  const locs = [...res.body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
+  const nested = locs.filter(isSitemapUrl);
+  const leaves = locs.filter((u) => !isSitemapUrl(u));
+
+  const direct = declared ? leaves : leaves.filter(isProductUrl);
   if (direct.length > 0) return unique(direct);
+  if (nested.length === 0 || depth >= MAX_SITEMAP_DEPTH) return [];
 
-  // Sitemap index: fetch the children that look like product sitemaps.
-  const children = top
-    .filter((u) => /\.xml/i.test(u))
-    .filter((u) => /product/i.test(u) || top.length <= 5)
-    .slice(0, 4);
+  // Prefer children the store names as products. Failing that, open a small
+  // index blind — but not a large one, where guessing costs 2,000 requests.
+  const named = nested.filter((u) => PRODUCT_SITEMAP_NAME.test(fileName(u)));
+  const candidates =
+    named.length > 0 ? named : declared || nested.length <= SMALL_INDEX ? nested : [];
 
   const found: string[] = [];
-  for (const child of children) {
-    const res = await get(child);
-    if (res.ok) {
-      // A sitemap the site itself calls "product" is a list of products, so
-      // take it at its word. Bose's are /p/…​.html, which no /products/
-      // pattern would ever match, and filtering would discard all 207.
-      const declared = /product/i.test(child);
-      const urls = locs(res.body).filter((u) => !/\.xml$/i.test(u));
-      found.push(...(declared ? urls : urls.filter(isProductUrl)));
-    }
-    if (found.length > 400) break;
+  for (const child of candidates.slice(0, MAX_SITEMAP_CHILDREN)) {
+    found.push(...(await productUrlsFrom(child, depth + 1, declared)));
+    if (found.length > MAX_SITEMAP_URLS) break;
   }
   return unique(found);
 }
 
-function isProductUrl(url: string): boolean {
-  return /\/products?\//i.test(url) && !/\.xml$/i.test(url);
+/** The last path segment, which is where a sitemap carries its name. */
+function fileName(url: string): string {
+  return pathOf(url).split("/").filter(Boolean).pop() ?? "";
+}
+
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split(/[?#]/)[0] ?? url;
+  }
+}
+
+function isSitemapUrl(url: string): boolean {
+  return SITEMAP_FILE.test(pathOf(url));
+}
+
+/**
+ * Whether a URL looks like one product's page.
+ *
+ * Structural, never a store or a category: the test is which segment sits
+ * above the slug. Real catalogues use far more than Shopify's `/products/` —
+ * Nike `/t/`, Target and IKEA `/p/`, Walmart `/ip/`, Chewy `/dp/`, Best Buy
+ * `/site/` — and matching only `/products/` reported nothing at all for every
+ * one of them. Requiring a segment *below* the token is what separates a
+ * product page from the listing page that shares its prefix.
+ */
+export function isProductUrl(url: string): boolean {
+  if (isSitemapUrl(url)) return false;
+  const segments = pathOf(url).split("/").filter(Boolean);
+  const last = segments[segments.length - 1] ?? "";
+  if (PRODUCT_ID_SEGMENT.test(last)) return true;
+  return segments
+    .slice(0, -1)
+    .some((segment) => PRODUCT_PATH_SEGMENTS.has(segment.toLowerCase()));
 }
 
 function unique(xs: string[]): string[] {
