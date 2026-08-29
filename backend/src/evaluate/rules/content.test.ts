@@ -79,4 +79,18 @@ describe("content.shipping", () => {
       for (const ref of entry.references) expect(resolvePath(source, ref)).toBeDefined();
     }
   });
+
+  test("evidences a run only with the failures it actually reported", () => {
+    const partial = loadExampleCheckResult();
+    for (const run of partial.agent_runs) {
+      run.outcome.failure_codes = run.outcome.failure_codes.filter(
+        (e) => e.code !== "OUTRANKED_BY_COMPETITOR",
+      );
+    }
+    const finding = contentShippingRule.evaluate(partial)!;
+    for (const entry of finding.evidence) {
+      expect(entry.fact).not.toContain("competitor");
+      expect(entry.references.some((r) => r.endsWith("ranked_candidates"))).toBe(false);
+    }
+  });
 });

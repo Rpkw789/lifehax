@@ -49,4 +49,19 @@ describe("structured.offer", () => {
     const finding = structuredOfferRule.evaluate(partial)!;
     expect(finding.addresses_failure_codes).toEqual(["PRICE_CLIENT_SIDE_ONLY"]);
   });
+
+  test("evidences a run only with the failures it actually reported", () => {
+    const partial = loadExampleCheckResult();
+    for (const run of partial.agent_runs) {
+      run.outcome.failure_codes = run.outcome.failure_codes.filter(
+        (e) => e.code !== "PRICE_CLIENT_SIDE_ONLY",
+      );
+    }
+    const finding = structuredOfferRule.evaluate(partial)!;
+    const perRun = finding.evidence.filter((e) => e.agent_run_id !== null);
+    for (const entry of perRun) {
+      expect(entry.fact).not.toContain("hydration");
+      expect(entry.references).not.toContain("site_audit.client_side_price_product_ids");
+    }
+  });
 });

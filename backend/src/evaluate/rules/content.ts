@@ -2,6 +2,7 @@
 
 import type { CheckResult } from "@contracts/check-result";
 import type { FailureCode } from "@contracts/codes";
+import type { FindingEvidence } from "@contracts/finding";
 import { missingAttributes, runIdsReporting } from "../helpers";
 import { attributeSnippet, shippingSnippet } from "../snippets";
 import type { DraftFinding, Rule } from "../types";
@@ -38,7 +39,25 @@ export const contentAttributesRule: Rule = {
   },
 };
 
-const SHIPPING_CODES: FailureCode[] = ["SHIPPING_INFO_NOT_FOUND", "OUTRANKED_BY_COMPETITOR"];
+/** Each shipping-related failure, with the sentence and paths that evidence it. */
+const SHIPPING_PROBES: {
+  code: FailureCode;
+  fact: string;
+  references: (runId: string) => string[];
+}[] = [
+  {
+    code: "SHIPPING_INFO_NOT_FOUND",
+    fact: "No shipping cost or delivery window was found on the product page",
+    references: (runId) => [`agent_runs#${runId}.observations.shipping_information_found`],
+  },
+  {
+    code: "OUTRANKED_BY_COMPETITOR",
+    fact: "The agent chose a competitor that states its shipping terms inline",
+    references: (runId) => [`agent_runs#${runId}.ranked_candidates`],
+  },
+];
+
+const SHIPPING_CODES: FailureCode[] = SHIPPING_PROBES.map((probe) => probe.code);
 
 export const contentShippingRule: Rule = {
   id: "content.shipping",
@@ -54,17 +73,26 @@ export const contentShippingRule: Rule = {
       runIdsReporting(source, code).some((id) => scoped.has(id)),
     );
 
+    const evidence: FindingEvidence[] = [];
+    for (const run of source.agent_runs) {
+      if (!scoped.has(run.run_id)) continue;
+
+      const probes = SHIPPING_PROBES.filter((probe) =>
+        (run.outcome?.failure_codes ?? []).some((entry) => entry.code === probe.code),
+      );
+      if (probes.length === 0) continue;
+
+      evidence.push({
+        agent_run_id: run.run_id,
+        fact: probes.map((probe) => probe.fact).join(" "),
+        references: probes.flatMap((probe) => probe.references(run.run_id)),
+      });
+    }
+
     return {
       severity: "medium",
       title: "Shipping terms are absent from the product page",
-      evidence: runIds.map((runId) => ({
-        agent_run_id: runId,
-        fact: "A shipping-sensitive agent dropped the product and chose a competitor that states free shipping inline",
-        references: [
-          `agent_runs#${runId}.observations.shipping_information_found`,
-          `agent_runs#${runId}.ranked_candidates`,
-        ],
-      })),
+      evidence,
       derived_from: runIds,
       addresses_failure_codes: observed,
       recommendation: {
