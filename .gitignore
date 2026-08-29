@@ -3,3 +3,4 @@ node_modules
 next-env.d.ts
 *.tsbuildinfo
 _handoff
+.worktrees/
