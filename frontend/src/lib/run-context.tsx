@@ -21,7 +21,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { PERSONAS, TICK_MS } from "./fixtures";
+import { FINDINGS, PERSONAS, TICK_MS } from "./fixtures";
 import { TOTAL_TICKS } from "./simulation";
 import type { RunInput } from "./types";
 
@@ -74,8 +74,11 @@ export function RunProvider({
   const [tick, setTick] = useState(0);
   const [running, setRunning] = useState(false);
   const [input, setInput] = useState<RunInput>(DEFAULT_INPUT);
-  const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({
-    F001: true,
+  // Open the highest-ranked finding, by identity rather than by a literal id —
+  // ids are assigned from rank order, so a hardcoded one goes stale silently.
+  const [openFindings, setOpenFindings] = useState<Record<string, boolean>>(() => {
+    const first = FINDINGS[0];
+    return first ? { [first.finding_id]: true } : {};
   });
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
