@@ -1,0 +1,543 @@
+{
+  "schema_version": "1.1.0",
+  "report_type": "happy2.llo_evaluation",
+  "report_id": "llo_01J8YZQK6F",
+  "run_id": "run_2026_08_29_001",
+  "generated_at": "2026-08-29T10:30:00Z",
+  "status": "complete",
+  "error": null,
+
+  "brand": {
+    "brand_id": "brand_acme",
+    "name": "Acme",
+    "store_url": "https://example.com",
+    "domain": "example.com"
+  },
+
+  "target_product": {
+    "product_id": "sku_12345",
+    "name": "Acme Trail Running Shoe",
+    "canonical_url": "https://example.com/products/trail-running-shoe",
+    "gtin": "0123456789012",
+    "sku": "TRAIL-001",
+    "category": "Running Shoes",
+    "price": { "amount": 129.99, "currency": "USD" }
+  },
+
+  "catalogue_snapshot": {
+    "fetched_at": "2026-08-29T10:24:10Z",
+    "products_total": 40,
+    "products_readable": 34,
+    "unreadable": [
+      { "url": "https://example.com/products/alpine-gaiter", "reason": "404 from sitemap entry" },
+      { "url": "https://example.com/products/trail-vest", "reason": "no parseable product data" }
+    ],
+    "target_field_sources": {
+      "name": "raw-html",
+      "price": "json-ld",
+      "availability": "json-ld",
+      "waterproof": "absent",
+      "weight": "raw-html",
+      "shipping": "absent"
+    }
+  },
+
+  "site_audit": {
+    "llms_txt": { "url": "https://example.com/llms.txt", "found": false, "status": 404, "note": "no curated site guide for models" },
+    "agent_commerce": { "url": "https://example.com/.well-known/agent-commerce", "found": false, "status": 404, "note": null },
+    "ucp": { "url": "https://example.com/.well-known/ucp", "found": false, "status": 404, "note": null },
+    "robots": { "url": "https://example.com/robots.txt", "found": true, "status": 200, "note": "no agent-specific rules", "allows_agents": true },
+    "sitemap": {
+      "url": "https://example.com/sitemap.xml",
+      "found": true,
+      "status": 200,
+      "note": "generated at build time, not on publish",
+      "products_listed": 28,
+      "products_total": 40,
+      "missing_product_ids": [
+        "sku_12345", "sku_12401", "sku_12402", "sku_12408", "sku_12411", "sku_12415",
+        "sku_12420", "sku_12433", "sku_12440", "sku_12455", "sku_12461", "sku_12470"
+      ]
+    },
+    "structured_data": {
+      "products_total": 40,
+      "products_with_json_ld": 31,
+      "products_with_offer": 12,
+      "missing_json_ld_product_ids": ["sku_12401", "sku_12408", "sku_12420", "sku_12440", "sku_12455", "sku_12461", "sku_12470", "sku_12480", "sku_12490"],
+      "missing_offer_product_ids": ["sku_12345", "sku_12401", "sku_12402", "sku_12408", "sku_12411", "sku_12415", "sku_12420", "sku_12433", "sku_12440", "sku_12455", "sku_12461", "sku_12470"]
+    },
+    "client_side_price_product_ids": ["sku_12345", "sku_12402", "sku_12411", "sku_12433"]
+  },
+
+  "evaluation_config": {
+    "locale": "en-US",
+    "currency": "USD",
+    "agent_count": 6,
+    "channels_tested": ["store_browse", "web_search", "acp", "ucp"],
+    "queries": [
+      { "query_id": "q_001", "text": "What are the best waterproof trail running shoes under $150?", "intent": "product_discovery" },
+      { "query_id": "q_002", "text": "I need cheap trail shoes that ship free, brand doesn't matter", "intent": "budget_led" },
+      { "query_id": "q_003", "text": "Trail runners, 10.5 wide, under 280g, rock plate required", "intent": "spec_led" },
+      { "query_id": "q_004", "text": "Something nice for a friend who just started trail running, around $130", "intent": "gift" },
+      { "query_id": "q_005", "text": "Compare the top trail running shoes for wet conditions", "intent": "comparison" },
+      { "query_id": "q_006", "text": "I need trail shoes delivered by Thursday, in stock now", "intent": "urgent" }
+    ]
+  },
+
+  "agent_runs": [
+    {
+      "run_id": "ar_001",
+      "query_id": "q_001",
+      "agent": {
+        "agent_id": "agent_value_shopper",
+        "name": "Value Shopper",
+        "persona": "Price-sensitive shopper comparing practical options",
+        "color_hex": "#3B82F6",
+        "model": "claude-opus-5",
+        "kind": "native-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:25:00Z",
+        "duration_ms": 48230,
+        "stages": [
+          { "stage": "store_browse", "status": "completed", "duration_ms": 14200, "error_code": null, "evidence_ids": ["ev_001"] },
+          { "stage": "web_search", "status": "completed", "duration_ms": 11040, "error_code": null, "evidence_ids": ["ev_002"] },
+          { "stage": "protocol_check", "status": "failed", "duration_ms": 3800, "error_code": "ACP_UNSUPPORTED", "evidence_ids": ["ev_003"] },
+          { "stage": "purchase_decision", "status": "completed", "duration_ms": 19190, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": true,
+        "target_identity_matched": true,
+        "target_recommended": true,
+        "target_rank": 2,
+        "candidate_count": 5,
+        "top_3": true,
+        "purchase_intent": "high",
+        "purchase_completed": false,
+        "confidence": 0.86,
+        "failure_codes": [
+          { "code": "ACP_UNSUPPORTED", "note": "no /.well-known/agent-commerce" },
+          { "code": "MISSING_ATTRIBUTE_EVIDENCE", "attribute": "waterproof", "note": "claim present in marketing copy but no structured value" }
+        ],
+        "final_choice": {
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false
+        },
+        "our_pages_fetched": ["https://example.com/products/trail-running-shoe"]
+      },
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false,
+          "reason_codes": [
+            { "code": "STRONG_REVIEW_EVIDENCE" },
+            { "code": "CLEAR_ATTRIBUTE_CLAIM", "attribute": "waterproof" }
+          ]
+        },
+        {
+          "rank": 2,
+          "product_id": "sku_12345",
+          "name": "Acme Trail Running Shoe",
+          "url": "https://example.com/products/trail-running-shoe",
+          "is_target_product": true,
+          "reason_codes": [
+            { "code": "PRICE_MATCH" },
+            { "code": "WEAK_ATTRIBUTE_CLAIM", "attribute": "waterproof" },
+            { "code": "STRUCTURED_DATA_ABSENT" }
+          ]
+        }
+      ],
+      "observations": {
+        "price_found": true,
+        "availability_found": true,
+        "shipping_information_found": false,
+        "return_policy_found": true,
+        "structured_product_data_found": true,
+        "reviews_found": true,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    },
+    {
+      "run_id": "ar_002",
+      "query_id": "q_002",
+      "agent": {
+        "agent_id": "agent_bargain_hunter",
+        "name": "Bargain Hunter",
+        "persona": "Wants the cheapest acceptable option with free shipping",
+        "color_hex": "#C2760A",
+        "model": "gpt-oss-shared-search",
+        "kind": "shared-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:25:30Z",
+        "duration_ms": 31400,
+        "stages": [
+          { "stage": "store_browse", "status": "completed", "duration_ms": 9800, "error_code": null, "evidence_ids": ["ev_004"] },
+          { "stage": "web_search", "status": "completed", "duration_ms": 10200, "error_code": null, "evidence_ids": ["ev_005"] },
+          { "stage": "protocol_check", "status": "failed", "duration_ms": 2100, "error_code": "ACP_UNSUPPORTED", "evidence_ids": [] },
+          { "stage": "purchase_decision", "status": "completed", "duration_ms": 9300, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": true,
+        "target_identity_matched": true,
+        "target_recommended": false,
+        "target_rank": null,
+        "candidate_count": 4,
+        "top_3": false,
+        "purchase_intent": "none",
+        "purchase_completed": false,
+        "confidence": 0.72,
+        "failure_codes": [
+          { "code": "SHIPPING_INFO_NOT_FOUND", "note": "no shipping cost anywhere on the product page" },
+          { "code": "OUTRANKED_BY_COMPETITOR" }
+        ],
+        "final_choice": {
+          "product_id": "competitor_sku_412",
+          "name": "Budget Trail Runner",
+          "url": "https://competitor.example/budget-trail",
+          "is_target_product": false
+        },
+        "our_pages_fetched": ["https://example.com/products/trail-running-shoe"]
+      },
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "product_id": "competitor_sku_412",
+          "name": "Budget Trail Runner",
+          "url": "https://competitor.example/budget-trail",
+          "is_target_product": false,
+          "reason_codes": [{ "code": "PRICE_MATCH" }, { "code": "SHIPPING_CLEAR" }]
+        },
+        {
+          "rank": 2,
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false,
+          "reason_codes": [{ "code": "SHIPPING_CLEAR" }, { "code": "STRONG_REVIEW_EVIDENCE" }]
+        }
+      ],
+      "observations": {
+        "price_found": true,
+        "availability_found": true,
+        "shipping_information_found": false,
+        "return_policy_found": true,
+        "structured_product_data_found": true,
+        "reviews_found": true,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    },
+    {
+      "run_id": "ar_003",
+      "query_id": "q_003",
+      "agent": {
+        "agent_id": "agent_spec_matcher",
+        "name": "Spec Matcher",
+        "persona": "Will not compromise on stated specifications",
+        "color_hex": "#2563EB",
+        "model": "gpt-oss-shared-search",
+        "kind": "shared-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:26:00Z",
+        "duration_ms": 27600,
+        "stages": [
+          { "stage": "store_browse", "status": "skipped", "duration_ms": 0, "error_code": null, "evidence_ids": [] },
+          { "stage": "web_search", "status": "completed", "duration_ms": 18400, "error_code": null, "evidence_ids": ["ev_006"] },
+          { "stage": "protocol_check", "status": "skipped", "duration_ms": 0, "error_code": null, "evidence_ids": [] },
+          { "stage": "purchase_decision", "status": "completed", "duration_ms": 9200, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": false,
+        "target_identity_matched": false,
+        "target_recommended": false,
+        "target_rank": null,
+        "candidate_count": 3,
+        "top_3": false,
+        "purchase_intent": "none",
+        "purchase_completed": false,
+        "confidence": 0.64,
+        "failure_codes": [
+          { "code": "NOT_IN_SEARCH_RESULTS" },
+          { "code": "NOT_IN_SITEMAP", "note": "sku_12345 absent from sitemap.xml" }
+        ],
+        "final_choice": {
+          "product_id": "competitor_sku_301",
+          "name": "Ridge Rock Plate 3",
+          "url": "https://competitor.example/ridge-rp3",
+          "is_target_product": false
+        },
+        "our_pages_fetched": []
+      },
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "product_id": "competitor_sku_301",
+          "name": "Ridge Rock Plate 3",
+          "url": "https://competitor.example/ridge-rp3",
+          "is_target_product": false,
+          "reason_codes": [
+            { "code": "CLEAR_ATTRIBUTE_CLAIM", "attribute": "rock_plate" },
+            { "code": "STRUCTURED_DATA_PRESENT" }
+          ]
+        }
+      ],
+      "observations": {
+        "price_found": false,
+        "availability_found": false,
+        "shipping_information_found": false,
+        "return_policy_found": false,
+        "structured_product_data_found": false,
+        "reviews_found": false,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    },
+    {
+      "run_id": "ar_004",
+      "query_id": "q_004",
+      "agent": {
+        "agent_id": "agent_gifter",
+        "name": "Vague Gifter",
+        "persona": "Buying for someone else, guided by price and reassurance",
+        "color_hex": "#7C3AED",
+        "model": "claude-opus-5",
+        "kind": "native-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:26:30Z",
+        "duration_ms": 41100,
+        "stages": [
+          { "stage": "store_browse", "status": "completed", "duration_ms": 12000, "error_code": null, "evidence_ids": ["ev_007"] },
+          { "stage": "web_search", "status": "completed", "duration_ms": 14300, "error_code": null, "evidence_ids": ["ev_008"] },
+          { "stage": "protocol_check", "status": "failed", "duration_ms": 2400, "error_code": "UCP_UNSUPPORTED", "evidence_ids": [] },
+          { "stage": "purchase_decision", "status": "completed", "duration_ms": 12400, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": true,
+        "target_identity_matched": true,
+        "target_recommended": true,
+        "target_rank": 1,
+        "candidate_count": 4,
+        "top_3": true,
+        "purchase_intent": "high",
+        "purchase_completed": false,
+        "confidence": 0.91,
+        "failure_codes": [
+          { "code": "NO_LLMS_TXT" },
+          { "code": "UCP_UNSUPPORTED" }
+        ],
+        "final_choice": {
+          "product_id": "sku_12345",
+          "name": "Acme Trail Running Shoe",
+          "url": "https://example.com/products/trail-running-shoe",
+          "is_target_product": true
+        },
+        "our_pages_fetched": ["https://example.com/products/trail-running-shoe", "https://example.com/policies/returns"]
+      },
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "product_id": "sku_12345",
+          "name": "Acme Trail Running Shoe",
+          "url": "https://example.com/products/trail-running-shoe",
+          "is_target_product": true,
+          "reason_codes": [{ "code": "PRICE_MATCH" }, { "code": "STRONG_REVIEW_EVIDENCE" }, { "code": "IN_STOCK" }]
+        },
+        {
+          "rank": 2,
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false,
+          "reason_codes": [{ "code": "PRICE_ABOVE_BUDGET" }]
+        }
+      ],
+      "observations": {
+        "price_found": true,
+        "availability_found": true,
+        "shipping_information_found": false,
+        "return_policy_found": true,
+        "structured_product_data_found": true,
+        "reviews_found": true,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    },
+    {
+      "run_id": "ar_005",
+      "query_id": "q_005",
+      "agent": {
+        "agent_id": "agent_comparator",
+        "name": "Comparison Shopper",
+        "persona": "Builds a shortlist and weighs attributes side by side",
+        "color_hex": "#0B8A5D",
+        "model": "gpt-oss-shared-search",
+        "kind": "shared-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:27:00Z",
+        "duration_ms": 38900,
+        "stages": [
+          { "stage": "store_browse", "status": "completed", "duration_ms": 13100, "error_code": null, "evidence_ids": ["ev_009"] },
+          { "stage": "web_search", "status": "completed", "duration_ms": 15600, "error_code": null, "evidence_ids": ["ev_010"] },
+          { "stage": "protocol_check", "status": "failed", "duration_ms": 2200, "error_code": "ACP_UNSUPPORTED", "evidence_ids": [] },
+          { "stage": "purchase_decision", "status": "completed", "duration_ms": 8000, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": true,
+        "target_identity_matched": false,
+        "target_recommended": false,
+        "target_rank": null,
+        "candidate_count": 5,
+        "top_3": false,
+        "purchase_intent": "low",
+        "purchase_completed": false,
+        "confidence": 0.58,
+        "failure_codes": [
+          { "code": "PRICE_CLIENT_SIDE_ONLY", "note": "price absent from served HTML, injected after hydration" },
+          { "code": "NO_OFFER_SCHEMA" },
+          { "code": "MISSING_ATTRIBUTE_EVIDENCE", "attribute": "waterproof" }
+        ],
+        "final_choice": {
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false
+        },
+        "our_pages_fetched": ["https://example.com/products/trail-running-shoe"]
+      },
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "product_id": "competitor_sku_789",
+          "name": "Competitor Trail Pro",
+          "url": "https://competitor.example/trail-pro",
+          "is_target_product": false,
+          "reason_codes": [{ "code": "STRUCTURED_DATA_PRESENT" }, { "code": "CLEAR_ATTRIBUTE_CLAIM", "attribute": "waterproof" }]
+        },
+        {
+          "rank": 2,
+          "product_id": "competitor_sku_301",
+          "name": "Ridge Rock Plate 3",
+          "url": "https://competitor.example/ridge-rp3",
+          "is_target_product": false,
+          "reason_codes": [{ "code": "STRUCTURED_DATA_PRESENT" }]
+        }
+      ],
+      "observations": {
+        "price_found": false,
+        "availability_found": true,
+        "shipping_information_found": false,
+        "return_policy_found": true,
+        "structured_product_data_found": false,
+        "reviews_found": true,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    },
+    {
+      "run_id": "ar_006",
+      "query_id": "q_006",
+      "agent": {
+        "agent_id": "agent_in_a_rush",
+        "name": "In A Rush",
+        "persona": "Needs it fast, will not tolerate friction",
+        "color_hex": "#D02A2A",
+        "model": "gpt-oss-shared-search",
+        "kind": "shared-search"
+      },
+      "journey": {
+        "started_at": "2026-08-29T10:27:30Z",
+        "duration_ms": 30000,
+        "stages": [
+          { "stage": "store_browse", "status": "failed", "duration_ms": 30000, "error_code": "AGENT_TIMEOUT", "evidence_ids": ["ev_011"] },
+          { "stage": "web_search", "status": "skipped", "duration_ms": 0, "error_code": null, "evidence_ids": [] },
+          { "stage": "protocol_check", "status": "skipped", "duration_ms": 0, "error_code": null, "evidence_ids": [] },
+          { "stage": "purchase_decision", "status": "skipped", "duration_ms": 0, "error_code": null, "evidence_ids": [] }
+        ]
+      },
+      "outcome": {
+        "target_discovered": false,
+        "target_identity_matched": false,
+        "target_recommended": false,
+        "target_rank": null,
+        "candidate_count": 0,
+        "top_3": false,
+        "purchase_intent": "none",
+        "purchase_completed": false,
+        "confidence": 0.0,
+        "failure_codes": [
+          { "code": "AGENT_TIMEOUT", "note": "store_browse exceeded 30s budget" }
+        ],
+        "final_choice": null,
+        "our_pages_fetched": []
+      },
+      "ranked_candidates": [],
+      "observations": {
+        "price_found": false,
+        "availability_found": false,
+        "shipping_information_found": false,
+        "return_policy_found": false,
+        "structured_product_data_found": false,
+        "reviews_found": false,
+        "acp_supported": false,
+        "ucp_supported": false
+      }
+    }
+  ],
+
+  "evidence": [
+    { "evidence_id": "ev_001", "kind": "fetch", "at": "2026-08-29T10:25:06Z", "url": "https://example.com/products/trail-running-shoe", "status": 200, "summary": "product page fetched, 1.8s to parseable HTML", "excerpt": "<h1>Acme Trail Running Shoe</h1>" },
+    { "evidence_id": "ev_002", "kind": "search_result", "at": "2026-08-29T10:25:20Z", "url": null, "status": null, "summary": "5 candidates returned for waterproof trail shoes under $150", "excerpt": null },
+    { "evidence_id": "ev_003", "kind": "fetch", "at": "2026-08-29T10:25:34Z", "url": "https://example.com/.well-known/agent-commerce", "status": 404, "summary": "no agent-commerce manifest", "excerpt": null },
+    { "evidence_id": "ev_004", "kind": "fetch", "at": "2026-08-29T10:25:36Z", "url": "https://example.com/products/trail-running-shoe", "status": 200, "summary": "no shipping cost found in served HTML", "excerpt": null },
+    { "evidence_id": "ev_005", "kind": "search_result", "at": "2026-08-29T10:25:48Z", "url": null, "status": null, "summary": "4 candidates; two competitors state free shipping inline", "excerpt": null },
+    { "evidence_id": "ev_006", "kind": "search_result", "at": "2026-08-29T10:26:14Z", "url": null, "status": null, "summary": "3 candidates; example.com absent from all results", "excerpt": null },
+    { "evidence_id": "ev_007", "kind": "fetch", "at": "2026-08-29T10:26:38Z", "url": "https://example.com/products/trail-running-shoe", "status": 200, "summary": "JSON-LD Product present, Offer absent", "excerpt": "\"@type\": \"Product\"" },
+    { "evidence_id": "ev_008", "kind": "search_result", "at": "2026-08-29T10:26:52Z", "url": null, "status": null, "summary": "4 candidates; target ranked first on price fit", "excerpt": null },
+    { "evidence_id": "ev_009", "kind": "extraction", "at": "2026-08-29T10:27:08Z", "url": "https://example.com/products/trail-running-shoe", "status": 200, "summary": "price absent from served HTML; present only after hydration", "excerpt": null },
+    { "evidence_id": "ev_010", "kind": "search_result", "at": "2026-08-29T10:27:22Z", "url": null, "status": null, "summary": "5 candidates; competitors carry structured Offer data", "excerpt": null },
+    { "evidence_id": "ev_011", "kind": "api_call", "at": "2026-08-29T10:28:00Z", "url": "https://example.com/products/trail-running-shoe", "status": null, "summary": "request exceeded 30s budget and was aborted", "excerpt": null }
+  ],
+
+  "scores": {
+    "hit_rate": 0.3333,
+    "discovery_rate": 0.6667,
+    "mean_rank": 1.5,
+    "by_query": [
+      { "query_id": "q_001", "discovered": true, "recommended": true, "rank": 2 },
+      { "query_id": "q_002", "discovered": true, "recommended": false, "rank": null },
+      { "query_id": "q_003", "discovered": false, "recommended": false, "rank": null },
+      { "query_id": "q_004", "discovered": true, "recommended": true, "rank": 1 },
+      { "query_id": "q_005", "discovered": true, "recommended": false, "rank": null },
+      { "query_id": "q_006", "discovered": false, "recommended": false, "rank": null }
+    ],
+    "competitors_ahead": [
+      { "name": "Competitor Trail Pro", "url": "https://competitor.example/trail-pro", "times_ahead": 3 },
+      { "name": "Budget Trail Runner", "url": "https://competitor.example/budget-trail", "times_ahead": 1 },
+      { "name": "Ridge Rock Plate 3", "url": "https://competitor.example/ridge-rp3", "times_ahead": 2 }
+    ],
+    "surfaces": {
+      "discoverability": 61,
+      "structured_data": 30,
+      "agent_protocol": 0,
+      "content_quality": 55
+    }
+  },
+
+  "hosted_sources": [],
+  "baseline_report_id": null
+}
