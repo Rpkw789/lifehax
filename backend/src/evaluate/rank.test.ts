@@ -52,6 +52,6 @@ describe("rankDrafts", () => {
       { rule: rule("b"), draft: draft("critical", ["ar_001", "ar_002"]) },
     ]);
     expect(out.map((f) => f.finding_id)).toEqual(["F001", "F002"]);
-    expect(out[0].severity).toBe("critical");
+    expect(out[0]?.severity).toBe("critical");
   });
 });

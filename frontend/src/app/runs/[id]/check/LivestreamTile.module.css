@@ -181,3 +181,85 @@
 .logIdle {
   color: var(--faint);
 }
+
+/* The capture fills the viewport box; the ring and caption overlay it. */
+.feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+
+/*
+ * The boot state, shown while a real agent's browser is being provisioned.
+ *
+ * Built from the chevron motif rather than a spinner: a filling track in the
+ * brief's color, a drifting grid, and a band of light crossing the viewport.
+ * It reads as instrumentation coming online, which is what is happening.
+ */
+.boot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--ground);
+  overflow: hidden;
+}
+
+.bootGrid {
+  position: absolute;
+  inset: -20px;
+  background-image:
+    linear-gradient(to right, var(--hairline) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hairline) 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.9;
+}
+
+.bootSweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 45%;
+  pointer-events: none;
+}
+
+.bootTrack {
+  position: relative;
+  width: 62%;
+}
+
+.bootStatus {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--tertiary);
+  text-transform: lowercase;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* A block caret, so the line reads as a terminal rather than a label. */
+.bootCaret {
+  display: inline-block;
+  width: 5px;
+  height: 10px;
+  background: var(--tertiary);
+}
+
+.bootAgent {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}

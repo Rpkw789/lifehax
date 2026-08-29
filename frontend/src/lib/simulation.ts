@@ -1,108 +1,80 @@
 /**
- * The simulation model.
+ * Derivations over the run.
  *
- * Everything here is a pure function of the tick — agent progress, settled and
- * blocked flags, per-stage counts, the hit rate, the event log. Nothing is
- * stored per agent. That keeps scrubbing and re-render trivial, and it is the
- * property worth preserving against a real backend too: buffer real events,
- * then replay them from a clock through these same derivations.
+ * Previously this derived everything from the fixture `PLAN` and a clock. It
+ * now folds the `AgentEvent`s the backend actually streamed — which is what
+ * `types.ts` always anticipated. Every function stays pure and the `AgentState`
+ * shape is unchanged, so the components did not have to move.
  */
 
-import {
-  PERSONAS,
-  PLAN,
-  STAGES,
-  START_GAP,
-  STAGE_PASS_LOGS,
-  STEP_TICKS,
-} from "./fixtures";
-import type { AgentEvent, AgentState, StageNumber } from "./types";
+import { STAGES, STAGE_PASS_LOGS } from "./fixtures";
+import type { AgentEvent, AgentState, Persona, StageNumber } from "./types";
 
-/** Ticks in a full run. */
-export const TOTAL_TICKS =
-  (PLAN.length - 1) * START_GAP + STAGES.length * STEP_TICKS + 6;
+/** Ticks in a nominal run, used for progress display before completion. */
+export const TOTAL_TICKS = 120;
 
 /** Displayed elapsed time for a tick, e.g. "4.2s". */
 export function elapsedLabel(tick: number): string {
   return `${(tick * 0.14).toFixed(1)}s`;
 }
 
-/** Every agent's state at `tick`. Pure. */
-export function agentStates(tick: number): AgentState[] {
-  return PLAN.map((plan, i) => {
-    const ceiling = plan.fail === 0 ? STAGES.length : plan.fail - 1;
-    const started = i * START_GAP;
-    const raw = Math.floor((tick - started) / STEP_TICKS);
-    const progress = Math.max(0, Math.min(ceiling, raw));
-    const settled = tick - started >= (ceiling + 1) * STEP_TICKS;
+/** Agent ids are stable and ordered: A01..A10, two per brief. */
+export function personaIndexOf(agentId: string): number {
+  const n = Number(agentId.replace(/\D/g, ""));
+  return Number.isFinite(n) && n > 0 ? Math.floor((n - 1) / 2) : 0;
+}
+
+/**
+ * Folds events into per-agent state.
+ *
+ * `complete` tells a settled-but-passing agent apart from one still in flight:
+ * until the run ends, an agent that has cleared every stage so far is simply
+ * ahead, not finished.
+ */
+export function agentStates(
+  events: AgentEvent[],
+  personas: Persona[],
+  agentIds: string[],
+  complete: boolean,
+): AgentState[] {
+  return agentIds.map((id) => {
+    const mine = events.filter((e) => e.agentId === id);
+    const failure = mine.find((e) => e.kind === "fail");
+    const passes = mine.filter((e) => e.kind === "pass");
+    const progress = passes.length === 0 ? 0 : Math.max(...passes.map((e) => e.stage));
+
+    const personaIndex = personaIndexOf(id);
+    const persona: Persona = personas[personaIndex] ?? {
+      name: "Shopper",
+      prompt: "",
+      color: "#6b7280",
+      tag: "SHP",
+    };
+
+    const fail: 0 | StageNumber = failure ? (failure.stage as StageNumber) : 0;
+    const blocked = Boolean(failure);
+    const ok = !blocked && progress >= STAGES.length;
+
     return {
-      id: plan.id,
-      persona: PERSONAS[plan.personaIndex],
-      personaIndex: plan.personaIndex,
-      fail: plan.fail,
-      reason: plan.reason,
-      ceiling,
-      started,
+      id,
+      persona,
+      personaIndex,
+      fail,
+      reason: failure?.reason,
+      ceiling: blocked ? fail - 1 : STAGES.length,
+      started: mine[0]?.t ?? 0,
       progress,
-      settled,
-      ok: settled && plan.fail === 0,
-      blocked: settled && plan.fail !== 0,
+      settled: blocked || ok || (complete && mine.length > 0),
+      ok,
+      blocked,
     };
   });
 }
 
-/**
- * Every event emitted up to `tick`, oldest first.
- * A real stream produces exactly these; the fixture derives them.
- */
-export function eventsUpTo(tick: number): AgentEvent[] {
-  const out: AgentEvent[] = [];
-  PLAN.forEach((plan, i) => {
-    const started = i * START_GAP;
-    const ceiling = plan.fail === 0 ? STAGES.length : plan.fail - 1;
-    for (let stage = 1; stage <= ceiling; stage++) {
-      const t = started + stage * STEP_TICKS;
-      if (t <= tick) {
-        out.push({ t, agentId: plan.id, stage: stage as StageNumber, kind: "pass" });
-      }
-    }
-    if (plan.fail !== 0) {
-      const t = started + plan.fail * STEP_TICKS;
-      if (t <= tick) {
-        out.push({
-          t,
-          agentId: plan.id,
-          stage: plan.fail,
-          kind: "fail",
-          reason: plan.reason,
-        });
-      }
-    }
-  });
-  return out.sort((a, b) => a.t - b.t || a.agentId.localeCompare(b.agentId));
-}
-
-/** The console line for an event. Copy is verbatim. */
+/** The console line for an event. Failures carry the backend's own reason. */
 export function logText(event: AgentEvent): string {
   if (event.kind === "fail") {
-    return `BLOCKED at ${STAGES[event.stage - 1]} — ${event.reason}`;
+    return `BLOCKED at ${STAGES[event.stage - 1]} — ${event.reason ?? "no reason given"}`;
   }
-  return STAGE_PASS_LOGS[event.stage - 1];
-}
-
-/** Persona index for an agent id, for badge and swatch colors. */
-export function personaIndexOf(agentId: string): number {
-  return PLAN.find((p) => p.id === agentId)?.personaIndex ?? 0;
-}
-
-/** How many agents reached each stage, by stage index. */
-export function stageReachCounts(agents: AgentState[]): number[] {
-  return STAGES.map((_, si) => agents.filter((a) => a.progress >= si + 1).length);
-}
-
-/** How many agents are blocked at each stage, by stage index. */
-export function stageBlockedCounts(agents: AgentState[]): number[] {
-  return STAGES.map(
-    (_, si) => agents.filter((a) => a.fail === si + 1 && a.settled).length,
-  );
+  return STAGE_PASS_LOGS[event.stage - 1] ?? "stage cleared";
 }

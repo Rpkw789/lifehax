@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+!.env.example
+.claude
+pnpm-lock.yaml
+pnpm-workspace.yaml
+README.md
+Dockerfile
+.dockerignore

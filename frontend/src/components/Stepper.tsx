@@ -3,14 +3,13 @@
 import { useRouter } from "next/navigation";
 
 import { ChevronTrack } from "@/components/ChevronTrack";
-import { PERSONAS, PLAN, SIM_SPEED } from "@/lib/fixtures";
+import { AGENT_COUNT } from "@/lib/fixtures";
 import { STEP_ORDER, useRun, type StepKey } from "@/lib/run-context";
-import { TOTAL_TICKS } from "@/lib/simulation";
 import styles from "./Stepper.module.css";
 
 export function Stepper({ step }: { step: StepKey }) {
   const router = useRouter();
-  const { runId, tick, startRun, completeRun } = useRun();
+  const { runId, tick, startRun, personas, agents, complete } = useRun();
   const current = STEP_ORDER.indexOf(step);
 
   /**
@@ -20,19 +19,20 @@ export function Stepper({ step }: { step: StepKey }) {
   const fractionFor = (index: number, key: StepKey): number => {
     if (current > index) return 1;
     if (current !== index) return 0;
-    if (key === "check") return Math.min(1, tick / TOTAL_TICKS);
+    if (key === "check") {
+      // Real progress: stages cleared across the population, not a clock.
+      if (complete) return 1;
+      const cleared = agents.reduce((sum, a) => sum + a.progress, 0);
+      return Math.min(1, cleared / (AGENT_COUNT * 6));
+    }
     return 0.5;
   };
 
-  const note =
-    step === "check"
-      ? `speed ×${SIM_SPEED}`
-      : `${PLAN.length} agents · ${PERSONAS.length} briefs`;
+  const note = `${AGENT_COUNT} agents · ${personas.length} briefs`;
 
   const go = (key: StepKey) => {
-    // Check always restarts the run; recommend and dashboard read a finished one.
+    // Starting is idempotent: revisiting check rejoins the run in flight.
     if (key === "check") startRun();
-    else if (key === "recommend" || key === "dashboard") completeRun();
     router.push(`/runs/${runId}/${key}`);
   };
 

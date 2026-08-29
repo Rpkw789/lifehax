@@ -1,19 +1,27 @@
 {
   "compilerOptions": {
-    "strict": true,
     "target": "ESNext",
-    "module": "ESNext",
+    "module": "Preserve",
     "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    // DOM is here for the page.evaluate() callbacks in agents.ts, which are
+    // serialised and run inside the agent's browser, not on the server.
+    "lib": ["ESNext", "DOM"],
     "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
-    "noEmit": true,
-    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@contracts/*": ["../shared/contracts/*"],
       "@fixtures/*": ["../shared/fixtures/*"]
     }
   },
-  "include": ["src/**/*.ts", "../shared/contracts/**/*.ts"]
+  "include": ["src", "../shared/contracts"]
 }

@@ -82,12 +82,24 @@ export interface AgentState {
   blocked: boolean;
 }
 
-/**
- * `Finding` and `Severity` are defined once, in the shared contract, and
- * re-exported here so the screens can keep importing from `@/lib/types`.
- * Do not redeclare them — the backend emits the contract shape.
- */
-export type { Finding, Severity, Surface, Effort, Owner } from "@contracts/finding";
+export type Severity = "critical" | "high" | "medium";
+
+/** A diagnosed cause, ranked by how many agents the fix unblocks. */
+export interface Finding {
+  key: string;
+  severity: Severity;
+  title: string;
+  /** Cites specific agent ids — this is what makes the screen credible. */
+  evidence: string;
+  fix: string;
+  /** e.g. "+4 agents" */
+  impact: string;
+  surface: string;
+  effort: string;
+  owner: string;
+  snippetLabel: string;
+  snippet: string;
+}
 
 /** The input payload a run is created from (`POST /runs`). */
 export interface RunInput {
@@ -98,4 +110,14 @@ export interface RunInput {
   testSkus: string;
   /** Persona indices that are switched off for this run. */
   disabledPersonas: number[];
+}
+
+/** A surface score, computed by the backend from the site audit. */
+export interface Surface {
+  name: string;
+  /** 0-100, as a string for display. */
+  score: string;
+  /** 0..1, for the chevron track fill. */
+  fraction: number;
+  note: string;
 }

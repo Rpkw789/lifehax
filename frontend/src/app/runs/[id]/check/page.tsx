@@ -6,15 +6,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
-import { PERSONAS, STAGES, TILE_IDS } from "@/lib/fixtures";
+import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
-import {
-  agentStates,
-  elapsedLabel,
-  eventsUpTo,
-  logText,
-  personaIndexOf,
-} from "@/lib/simulation";
+import { elapsedLabel, logText } from "@/lib/simulation";
 import { ramp } from "@/lib/tokens";
 import motion from "@/styles/motion.module.css";
 import styles from "./check.module.css";
@@ -22,27 +16,36 @@ import { LivestreamTile } from "./LivestreamTile";
 
 export default function CheckScreen() {
   const router = useRouter();
-  const { runId, storeHost, tick, running, complete, startRun } = useRun();
+  const {
+    runId,
+    storeHost,
+    tick,
+    running,
+    complete,
+    error,
+    startRun,
+    agents,
+    events,
+    personas,
+    sessions,
+    tileIds,
+  } = useRun();
   const started = useRef(false);
 
-  // Landing on this URL directly should show a run, not a dead clock.
+  // Landing on this URL directly should start the run rather than sit dead.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (!running && tick === 0) startRun();
+    if (!running && !complete) startRun();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Everything below is derived from the tick. Nothing per-agent is stored.
-  const agents = agentStates(tick);
-  const events = eventsUpTo(tick);
   const settled = agents.filter((a) => a.settled).length;
   const won = agents.filter((a) => a.ok).length;
   const hitRate = Math.round((won / agents.length) * 100);
 
-  const tiles = TILE_IDS.map((id) => agents.find((a) => a.id === id)).filter(
-    (a): a is NonNullable<typeof a> => a !== undefined,
-  );
+  const tiles = tileIds
+    .map((id) => agents.find((a) => a.id === id))
+    .filter((a): a is NonNullable<typeof a> => a !== undefined);
 
   const stats: [string, string][] = [
     ["Elapsed", elapsedLabel(tick)],
@@ -76,7 +79,13 @@ export default function CheckScreen() {
           </div>
         </div>
 
-        {complete && (
+        {error && (
+          <div className={styles.banner}>
+            <div className={styles.bannerText}>Run failed — {error}</div>
+          </div>
+        )}
+
+        {complete && !error && (
           <div className={styles.banner}>
             <div className={styles.bannerText}>
               Simulation complete — {won} of {agents.length} agents completed a
@@ -88,8 +97,11 @@ export default function CheckScreen() {
             >
               View recommendations
             </Button>
-            <Button variant="outline" onClick={startRun}>
-              Re-run
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/runs/${runId}/input`)}
+            >
+              New run
             </Button>
           </div>
         )}
@@ -137,13 +149,16 @@ export default function CheckScreen() {
         </div>
 
         <SectionLabel className={styles.livestreamLabel}>
-          Livestream · {tiles.length} of {agents.length} sessions
+          Livestream · {tiles.length} of {agents.length} sessions · {personas.length} briefs
         </SectionLabel>
         <div className={styles.livestream}>
           {tiles.map((agent) => (
             <LivestreamTile
               key={agent.id}
               agent={agent}
+              storeHost={storeHost}
+              liveViewUrl={sessions[agent.id]}
+              booting={running && agent.progress === 0 && !agent.blocked}
               events={events.filter((e) => e.agentId === agent.id)}
             />
           ))}
@@ -232,7 +247,9 @@ export default function CheckScreen() {
                 <span
                   className={styles.consoleBadge}
                   style={{
-                    background: PERSONAS[personaIndexOf(event.agentId)].color,
+                    background:
+                      agents.find((a) => a.id === event.agentId)?.persona
+                        .color ?? "var(--border-strong)",
                   }}
                 >
                   {event.agentId}

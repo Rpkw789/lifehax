@@ -17,14 +17,14 @@ describe("evidencePerRun", () => {
     }
     const out = evidencePerRun(partial, PROBES);
     expect(out).toHaveLength(1);
-    expect(out[0].fact).toBe("sitemap");
-    expect(out[0].references).toEqual(["agent_runs#ar_003.outcome.target_discovered"]);
+    expect(out[0]?.fact).toBe("sitemap");
+    expect(out[0]?.references).toEqual(["agent_runs#ar_003.outcome.target_discovered"]);
   });
 
   test("combines both facts when a run reported both", () => {
     const out = evidencePerRun(loadExampleCheckResult(), PROBES);
-    expect(out[0].fact).toBe("sitemap search");
-    expect(out[0].references).toHaveLength(2);
+    expect(out[0]?.fact).toBe("sitemap search");
+    expect(out[0]?.references).toHaveLength(2);
   });
 
   test("skips runs outside the `only` set", () => {

@@ -1,0 +1,12 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+.claude
+pnpm-lock.yaml
+pnpm-workspace.yaml
+*.tsbuildinfo
+Dockerfile
+.dockerignore
+cloudbuild.yaml

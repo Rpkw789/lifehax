@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { assertCheckResult, validateCheckResult } from "@contracts/validate";
 import type { Finding } from "@contracts/finding";
-import { evaluate } from "../evaluate/evaluate";
+import { evaluate } from "../evaluate";
 import type { FindingsStore } from "../store/findings";
 import { jsonError } from "./errors";
 

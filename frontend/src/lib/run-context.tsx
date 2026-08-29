@@ -2,12 +2,11 @@
 
 /**
  * Client-side run state, held at the shell so it survives navigation between
- * the four routes.
+ * the routes.
  *
- * The shape here mirrors the eventual server resource: a run is created from
- * `RunInput`, produces a stream of `AgentEvent`s, and the re-check is a child
- * run. Today the stream is a fixture clock; swapping in an SSE subscription
- * means replacing `startRun` and the tick interval, nothing else.
+ * A run is created on the backend from `RunInput`, then its `AgentEvent`s
+ * arrive over SSE. Everything the screens render is derived from the buffered
+ * events — nothing per-agent is stored, which is what keeps re-render trivial.
  */
 
 import {
@@ -21,34 +20,56 @@ import {
   type ReactNode,
 } from "react";
 
-import { FINDINGS, PERSONAS, TICK_MS } from "./fixtures";
-import { TOTAL_TICKS } from "./simulation";
-import type { RunInput } from "./types";
+import { createRun, subscribeToRun, type StreamMessage } from "./api";
+import { ARCHETYPE_PERSONAS } from "./fixtures";
+import { agentStates } from "./simulation";
+import type {
+  AgentEvent,
+  AgentState,
+  Finding,
+  Persona,
+  RunInput,
+  Surface,
+} from "./types";
 
 export type StepKey = "input" | "check" | "recommend" | "dashboard";
 
 export const STEP_ORDER: readonly StepKey[] = ["input", "check", "recommend", "dashboard"];
 
+/** Ten agents, two per brief. Ids are assigned by the backend. */
+export const AGENT_IDS = Array.from(
+  { length: 10 },
+  (_, i) => `A${String(i + 1).padStart(2, "0")}`,
+);
+
 interface RunContextValue {
+  /** The route's run id, which is also the backend run id once started. */
   runId: string;
-  /** Simulation clock. Every derived value on Check comes from this. */
+  /** Highest tick seen, driving the elapsed readout. */
   tick: number;
   running: boolean;
-  /** The run has reached its final tick. */
   complete: boolean;
+  error: string | null;
   startRun: () => void;
-  /** Pin the run at its end, for the screens that read a finished run. */
-  completeRun: () => void;
 
   input: RunInput;
   setInputField: (field: keyof Omit<RunInput, "disabledPersonas">, value: string) => void;
   togglePersona: (index: number) => void;
-  /** Host of the store URL, e.g. "northwind.supply". */
   storeHost: string;
-  /** How many briefs are switched on. */
   activePersonaCount: number;
 
-  /** Recommend: which finding accordions are open. */
+  /** Live run data. */
+  events: AgentEvent[];
+  agents: AgentState[];
+  personas: Persona[];
+  findings: Finding[];
+  surfaces: Surface[];
+  catalogueCount: number;
+  /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
+  sessions: Record<string, string>;
+  /** Tiles to show: agents with a live browser first. */
+  tileIds: string[];
+
   openFindings: Record<string, boolean>;
   toggleFinding: (key: string) => void;
 }
@@ -56,11 +77,11 @@ interface RunContextValue {
 const RunContext = createContext<RunContextValue | null>(null);
 
 const DEFAULT_INPUT: RunInput = {
-  storeUrl: "https://northwind.supply",
+  storeUrl: "",
   feedUrl: "",
   agentEndpoint: "",
-  sitemapUrl: "/sitemap.xml",
-  testSkus: "ATL-1120, NW-DESK-04",
+  sitemapUrl: "",
+  testSkus: "",
   disabledPersonas: [],
 };
 
@@ -71,47 +92,85 @@ export function RunProvider({
   runId: string;
   children: ReactNode;
 }) {
-  const [tick, setTick] = useState(0);
-  const [running, setRunning] = useState(false);
   const [input, setInput] = useState<RunInput>(DEFAULT_INPUT);
-  // Open the highest-ranked finding, by identity rather than by a literal id —
-  // ids are assigned from rank order, so a hardcoded one goes stale silently.
-  const [openFindings, setOpenFindings] = useState<Record<string, boolean>>(() => {
-    const first = FINDINGS[0];
-    return first ? { [first.finding_id]: true } : {};
-  });
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [surfaces, setSurfaces] = useState<Surface[]>([]);
+  const [catalogueCount, setCatalogueCount] = useState(0);
+  const [sessions, setSessions] = useState<Record<string, string>>({});
+  const [running, setRunning] = useState(false);
+  const [complete, setComplete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({});
 
-  const stop = useCallback(() => {
-    if (timer.current !== null) {
-      clearInterval(timer.current);
-      timer.current = null;
+  const unsubscribe = useRef<(() => void) | null>(null);
+  const started = useRef(false);
+
+  useEffect(() => () => unsubscribe.current?.(), []);
+
+  const handle = useCallback((message: StreamMessage) => {
+    switch (message.type) {
+      case "catalogue":
+        setCatalogueCount(message.products);
+        break;
+      case "personas":
+        setPersonas(message.personas);
+        break;
+      case "session":
+        setSessions((current) => ({
+          ...current,
+          [message.agentId]: message.liveViewUrl,
+        }));
+        break;
+      case "sessions_closed":
+        // The URLs outlive their sessions and would render Browserbase's
+        // "debugging connection was closed" page. Drop them.
+        setSessions({});
+        break;
+      case "agent":
+        setEvents((current) => [...current, message.event]);
+        break;
+      case "findings":
+        setFindings(message.findings);
+        setSurfaces(message.surfaces);
+        break;
+      case "done":
+        setRunning(false);
+        setComplete(true);
+        if (message.error) setError(message.error);
+        break;
+      default:
+        break;
     }
   }, []);
 
-  useEffect(() => stop, [stop]);
-
   const startRun = useCallback(() => {
-    stop();
-    setTick(0);
-    setRunning(true);
-    timer.current = setInterval(() => {
-      setTick((current) => {
-        if (current >= TOTAL_TICKS) {
-          stop();
-          setRunning(false);
-          return current;
-        }
-        return current + 1;
-      });
-    }, TICK_MS);
-  }, [stop]);
+    if (started.current) return;
+    started.current = true;
 
-  const completeRun = useCallback(() => {
-    stop();
-    setRunning(false);
-    setTick(TOTAL_TICKS);
-  }, [stop]);
+    setEvents([]);
+    setSessions({});
+    setFindings([]);
+    setSurfaces([]);
+    setError(null);
+    setComplete(false);
+    setRunning(true);
+
+    void createRun(input)
+      .then((backendRunId) => {
+        unsubscribe.current?.();
+        unsubscribe.current = subscribeToRun(backendRunId, handle, (message) => {
+          setError(message);
+          setRunning(false);
+        });
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setRunning(false);
+        started.current = false;
+      });
+  }, [input, handle]);
 
   const setInputField = useCallback(
     (field: keyof Omit<RunInput, "disabledPersonas">, value: string) => {
@@ -136,27 +195,57 @@ export function RunProvider({
     setOpenFindings((current) => ({ ...current, [key]: !current[key] }));
   }, []);
 
-  const storeHost = useMemo(
-    () =>
-      (input.storeUrl || DEFAULT_INPUT.storeUrl)
-        .replace(/^https?:\/\//, "")
-        .replace(/\/$/, ""),
-    [input.storeUrl],
+  const tick = useMemo(
+    () => events.reduce((max, e) => Math.max(max, e.t), 0),
+    [events],
   );
+
+  // Before the backend has generated briefs, fall back to the archetype list so
+  // the Input screen has something to show.
+  const shownPersonas: Persona[] =
+    personas.length > 0 ? personas : [...ARCHETYPE_PERSONAS];
+
+  const agents = useMemo(
+    () => agentStates(events, shownPersonas, AGENT_IDS, complete),
+    [events, shownPersonas, complete],
+  );
+
+  // Show the agents that are really driving a browser first — they are the
+  // only ones with something live to look at.
+  const tileIds = useMemo(() => {
+    const live = AGENT_IDS.filter((id) => sessions[id]);
+    const rest = AGENT_IDS.filter((id) => !sessions[id]);
+    return [...live, ...rest].slice(0, 4);
+  }, [sessions]);
+
+  const storeHost = useMemo(() => {
+    const raw = input.storeUrl.trim();
+    if (!raw) return "no store yet";
+    return raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }, [input.storeUrl]);
 
   const value = useMemo<RunContextValue>(
     () => ({
       runId,
       tick,
       running,
-      complete: tick >= TOTAL_TICKS,
+      complete,
+      error,
       startRun,
-      completeRun,
       input,
       setInputField,
       togglePersona,
       storeHost,
-      activePersonaCount: PERSONAS.length - input.disabledPersonas.length,
+      activePersonaCount:
+        shownPersonas.length - input.disabledPersonas.length,
+      events,
+      agents,
+      personas: shownPersonas,
+      findings,
+      surfaces,
+      catalogueCount,
+      sessions,
+      tileIds,
       openFindings,
       toggleFinding,
     }),
@@ -164,12 +253,21 @@ export function RunProvider({
       runId,
       tick,
       running,
+      complete,
+      error,
       startRun,
-      completeRun,
       input,
       setInputField,
       togglePersona,
       storeHost,
+      shownPersonas,
+      events,
+      agents,
+      findings,
+      surfaces,
+      catalogueCount,
+      sessions,
+      tileIds,
       openFindings,
       toggleFinding,
     ],

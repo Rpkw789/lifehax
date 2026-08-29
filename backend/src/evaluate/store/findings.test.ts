@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadExampleFindings } from "../fixtures";
+import { loadExampleFindings } from "../../fixtures";
 import { openFindingsStore } from "./findings";
 
 describe("findings store", () => {

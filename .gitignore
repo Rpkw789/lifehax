@@ -4,3 +4,7 @@ next-env.d.ts
 *.tsbuildinfo
 _handoff
 *.sqlite
+
+# secrets
+.env*
+!.env.example

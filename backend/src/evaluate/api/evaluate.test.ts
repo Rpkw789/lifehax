@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadExampleCheckResult } from "../fixtures";
+import { loadExampleCheckResult } from "../../fixtures";
 import { openFindingsStore } from "../store/findings";
 import type { FindingsStore } from "../store/findings";
 import { createEvaluateRoutes } from "./evaluate";
