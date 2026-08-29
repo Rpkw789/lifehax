@@ -1,6 +1,6 @@
 import type { MessageCreateParams } from "@anthropic-ai/sdk/resources/messages/messages";
-import { parseAnthropicContent, SHOPPER_OUTPUT_SCHEMA, shopperPrompt } from "./proposal.ts";
-import type { SearchCitation, WebSearchClient, WebSearchRequest, WebSearchResponse } from "./types.ts";
+import { parseAnthropicProposalContent, parseAnthropicResearch, rankingPrompt, SHOPPER_OUTPUT_SCHEMA, shopperPrompt } from "./proposal.ts";
+import type { WebSearchClient, WebSearchRequest, WebSearchResponse } from "./types.ts";
 
 interface CloudflareOptions {
   accountId: string;
@@ -23,23 +23,38 @@ export class CloudflareWebSearchClient implements WebSearchClient {
 
   async recommend(request: WebSearchRequest): Promise<WebSearchResponse> {
     const started = performance.now();
+    const researchContent = await this.#send(
+      webSearchMessageParams("anthropic/claude-opus-4.8", request, true),
+      request.signal,
+    );
+    const research = parseAnthropicResearch(researchContent);
+    const proposalContent = await this.#send(
+      rankingMessageParams("anthropic/claude-opus-4.8", request, research.researchText, research.citations, true),
+      request.signal,
+    );
+    return {
+      proposal: parseAnthropicProposalContent(proposalContent),
+      citations: research.citations,
+      latencyMs: Math.max(0, Math.round(performance.now() - started)),
+    };
+  }
+
+  async #send(params: MessageCreateParams, signal: AbortSignal): Promise<unknown[]> {
     const response = await this.#transport(
       `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.#accountId)}/ai/v1/messages`,
       {
         method: "POST",
-        signal: request.signal,
+        signal,
         headers: { authorization: `Bearer ${this.#apiToken}`, "content-type": "application/json" },
-        body: JSON.stringify(messageParams("anthropic/claude-opus-4.8", request, true)),
+        body: JSON.stringify(params),
       },
     );
-    if (!response.ok) throw new Error(`Cloudflare web search failed with HTTP ${response.status}`);
-    const content = parseSseContent(await response.text());
-    const parsed = parseAnthropicContent(content);
-    return { ...parsed, latencyMs: Math.max(0, Math.round(performance.now() - started)) };
+    if (!response.ok) throw new Error(`Cloudflare Anthropic request failed with HTTP ${response.status}`);
+    return parseSseContent(await response.text());
   }
 }
 
-export function messageParams(model: string, request: WebSearchRequest, stream: boolean): MessageCreateParams {
+export function webSearchMessageParams(model: string, request: WebSearchRequest, stream: boolean): MessageCreateParams {
   return {
     model,
     max_tokens: 8_000,
@@ -47,6 +62,22 @@ export function messageParams(model: string, request: WebSearchRequest, stream: 
     thinking: { type: "adaptive" },
     messages: [{ role: "user", content: shopperPrompt(request.query, request.locale, request.currency) }],
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+  };
+}
+
+export function rankingMessageParams(
+  model: string,
+  request: WebSearchRequest,
+  researchText: string,
+  citations: WebSearchResponse["citations"],
+  stream: boolean,
+): MessageCreateParams {
+  return {
+    model,
+    max_tokens: 8_000,
+    stream,
+    thinking: { type: "adaptive" },
+    messages: [{ role: "user", content: rankingPrompt(request.query, request.locale, request.currency, researchText, citations) }],
     output_config: { format: { type: "json_schema", schema: SHOPPER_OUTPUT_SCHEMA } },
   };
 }
