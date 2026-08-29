@@ -1,3 +1,8 @@
+.chart {
+  height: 180px;
+  margin-bottom: 20px;
+}
+
 .note {
   font-size: 13px;
   color: var(--tertiary);

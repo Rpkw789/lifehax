@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { listRuns } from "@/lib/api";
+import { LineChart } from "@/vendor/tremor/LineChart";
 import { iterationsFor, type Iteration } from "@/lib/history";
 import styles from "./History.module.css";
 
@@ -48,27 +49,46 @@ export function History({ storeUrl }: { storeUrl: string }) {
     );
   }
 
+  const series = iterations.map((run) => ({
+    date: formatWhen(run.createdAt),
+    Findings: run.findings,
+    Blocked: run.blocked,
+  }));
+
   return (
-    <div className={styles.rows}>
-      {iterations.map((run, i) => (
-        <div
-          className={`${styles.row} ${i === iterations.length - 1 ? styles.latest : ""}`}
-          key={run.runId}
-        >
-          <span className={styles.when}>{formatWhen(run.createdAt)}</span>
-          <Metric
-            value={run.findings}
-            unit={run.findings === 1 ? "finding" : "findings"}
-            delta={run.findingsDelta}
-          />
-          <Metric
-            value={run.blocked}
-            unit="blocked"
-            delta={run.blockedDelta}
-          />
-        </div>
-      ))}
-    </div>
+    <>
+      <LineChart
+        className={styles.chart}
+        data={series}
+        index="date"
+        categories={["Findings", "Blocked"]}
+        colors={["gray", "amber"]}
+        valueFormatter={(v) => String(v)}
+        showLegend
+        yAxisWidth={28}
+      />
+
+      <div className={styles.rows}>
+        {iterations.map((run, i) => (
+          <div
+            className={`${styles.row} ${i === iterations.length - 1 ? styles.latest : ""}`}
+            key={run.runId}
+          >
+            <span className={styles.when}>{formatWhen(run.createdAt)}</span>
+            <Metric
+              value={run.findings}
+              unit={run.findings === 1 ? "finding" : "findings"}
+              delta={run.findingsDelta}
+            />
+            <Metric
+              value={run.blocked}
+              unit="blocked"
+              delta={run.blockedDelta}
+            />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
