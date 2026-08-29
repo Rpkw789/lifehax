@@ -123,6 +123,11 @@ export function RunProvider({
           [message.agentId]: message.liveViewUrl,
         }));
         break;
+      case "sessions_closed":
+        // The URLs outlive their sessions and would render Browserbase's
+        // "debugging connection was closed" page. Drop them.
+        setSessions({});
+        break;
       case "agent":
         setEvents((current) => [...current, message.event]);
         break;

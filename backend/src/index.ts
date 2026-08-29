@@ -131,10 +131,16 @@ app.get("/runs/:id/events", (c) => {
     if (run.personas.length > 0) {
       await send({ type: "personas", personas: run.personas });
     }
-    for (const [agentId, session] of Object.entries(run.sessions)) {
-      if (session.liveViewUrl) {
-        await send({ type: "session", agentId, liveViewUrl: session.liveViewUrl });
+    // Only replay live views that are still alive; a late subscriber must not
+    // be handed a URL whose session has already stopped.
+    if (!run.sessionsClosed) {
+      for (const [agentId, session] of Object.entries(run.sessions)) {
+        if (session.liveViewUrl) {
+          await send({ type: "session", agentId, liveViewUrl: session.liveViewUrl });
+        }
       }
+    } else {
+      await send({ type: "sessions_closed" });
     }
     if (run.checks) await send({ type: "checks", checks: run.checks });
     for (const event of run.events) await send({ type: "agent", event });

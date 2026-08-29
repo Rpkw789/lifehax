@@ -1,0 +1,15 @@
+# Separate from the backend because the frontend needs a --build-arg, which
+# `gcloud run deploy --source` cannot pass.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=NEXT_PUBLIC_API_BASE=${_API_BASE}
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+options:
+  # Avoids needing a user-owned logs bucket on projects using the default SA.
+  logging: CLOUD_LOGGING_ONLY

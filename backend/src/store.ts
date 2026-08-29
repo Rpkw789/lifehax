@@ -15,6 +15,8 @@ export type StreamMessage =
   | { type: "catalogue"; products: number; source: string }
   | { type: "personas"; personas: Run["personas"] }
   | { type: "session"; agentId: string; liveViewUrl: string }
+  /** Every browser has closed; live views are dead and must not be shown. */
+  | { type: "sessions_closed" }
   | { type: "checks"; checks: NonNullable<Run["checks"]> }
   | { type: "agent"; event: AgentEvent }
   | { type: "findings"; findings: Run["findings"]; surfaces: Run["surfaces"] }
@@ -35,6 +37,7 @@ export function createRun(input: RunInput): Run {
     findings: [],
     events: [],
     sessions: {},
+    sessionsClosed: false,
   };
   runs.set(run.runId, run);
   return run;

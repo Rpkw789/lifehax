@@ -61,3 +61,31 @@
 .scanSweep {
   animation: h2scan 2.6s linear infinite;
 }
+
+@keyframes h2sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes h2grid {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 -18px;
+  }
+}
+
+/** The band of light crossing a tile while its browser is being provisioned. */
+.bootSweep {
+  animation: h2sweep 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/** The faint grid drifting behind it. Slow enough to read as instrumentation. */
+.bootGrid {
+  animation: h2grid 1.4s linear infinite;
+}
