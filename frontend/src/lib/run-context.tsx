@@ -75,7 +75,7 @@ export function RunProvider({
   const [running, setRunning] = useState(false);
   const [input, setInput] = useState<RunInput>(DEFAULT_INPUT);
   const [openFindings, setOpenFindings] = useState<Record<string, boolean>>({
-    i1: true,
+    F001: true,
   });
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
