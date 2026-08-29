@@ -25,7 +25,10 @@ export function rankDrafts(drafts: RankedDraft[]): Finding[] {
       const bySeverity = SEVERITY_ORDER[a.draft.severity] - SEVERITY_ORDER[b.draft.severity];
       if (bySeverity !== 0) return bySeverity;
 
-      return a.rule.id.localeCompare(b.rule.id);
+      // Plain comparison rather than localeCompare: collation is host-dependent,
+      // and this ordering has to come out identical everywhere.
+      if (a.rule.id === b.rule.id) return 0;
+      return a.rule.id < b.rule.id ? -1 : 1;
     })
     .map((entry, index) => ({
       finding_id: `F${String(index + 1).padStart(3, "0")}`,

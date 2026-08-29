@@ -36,10 +36,13 @@ describe("rankDrafts", () => {
   });
 
   test("breaks a remaining tie by rule id, so ordering is deterministic", () => {
+    // Registered in the reverse of the expected output order, so a missing or
+    // reversed tie-break would change the result rather than pass silently.
     const out = rankDrafts([
-      { rule: rule("protocol.llms_txt"), draft: draft("medium", ["ar_001"]) },
-      { rule: rule("content.shipping"), draft: draft("medium", ["ar_001"]) },
+      { rule: rule("protocol.llms_txt"), draft: { ...draft("medium", ["ar_001"]), title: "llms" } },
+      { rule: rule("content.shipping"), draft: { ...draft("medium", ["ar_001"]), title: "shipping" } },
     ]);
+    expect(out.map((f) => f.title)).toEqual(["shipping", "llms"]);
     expect(out.map((f) => f.finding_id)).toEqual(["F001", "F002"]);
   });
 
