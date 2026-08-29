@@ -7,17 +7,17 @@ import { ramp } from "@/lib/tokens";
 import type { FunnelStep } from "@/lib/funnel";
 import styles from "./Funnel.module.css";
 
-/** Chevrons per track. Enough to read a 1-in-6 difference at a glance. */
-const CHEVRONS = 24;
-
 /**
  * The run funnel.
  *
+ * One chevron per agent, so a chevron is a countable thing rather than a
+ * percentage of a bar: four lit chevrons means four agents, and the two that
+ * went dark are the two that dropped.
+ *
  * Tracks fill from empty on mount, one step after another, so the cohort is
- * seen narrowing rather than presented already narrowed — the shape is the
- * finding. The chevrons are the product's load-bearing motif and carry their
- * own 420ms fill transition, so the motion here is a staggered mount rather
- * than an animation invented for this chart.
+ * seen narrowing rather than presented already narrowed. The chevrons are the
+ * product's load-bearing motif and carry their own 420ms fill transition, so
+ * the motion is a staggered mount rather than an animation invented here.
  */
 export function Funnel({ steps }: { steps: FunnelStep[] }) {
   const [drawn, setDrawn] = useState(0);
@@ -43,19 +43,14 @@ export function Funnel({ steps }: { steps: FunnelStep[] }) {
     <div className={styles.funnel}>
       {steps.map((step, i) => {
         const shown = i < drawn;
-        // Indent grows as the cohort shrinks, so the rows form a funnel.
-        const indent = `${Math.round((1 - step.fraction) * 96)}px`;
 
         return (
           <div key={step.key}>
             <div className={styles.step}>
               <span className={styles.label}>{step.label}</span>
-              <span
-                className={styles.trackCell}
-                style={{ ["--indent" as string]: shown ? indent : "0px" }}
-              >
+              <span className={styles.trackCell}>
                 <ChevronTrack
-                  count={CHEVRONS}
+                  count={total}
                   fraction={shown ? step.fraction : 0}
                   fill={ramp(i, steps.length)}
                 />

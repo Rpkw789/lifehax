@@ -118,7 +118,7 @@ export default function DashboardScreen() {
               <div className={styles.bar} key={key}>
                 <span>{label}</span>
                 <ChevronTrack
-                  count={20}
+                  count={18}
                   fraction={scores.surfaces[key] / 100}
                   fill="var(--ink)"
                 />

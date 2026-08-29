@@ -17,12 +17,10 @@
   color: var(--secondary);
 }
 
-/* The track indents as the cohort narrows, so the silhouette is the funnel. */
+/* Left-aligned: the narrowing is the count of lit chevrons, not an indent. */
 .trackCell {
   display: flex;
   justify-content: flex-start;
-  padding-left: var(--indent, 0px);
-  transition: padding-left 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .count {
@@ -74,10 +72,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .trackCell {
-    transition: none;
-  }
-
   .dropBody {
     animation: none;
     opacity: 1;
@@ -96,7 +90,4 @@
     gap: 10px;
   }
 
-  .trackCell {
-    padding-left: 0;
-  }
 }
