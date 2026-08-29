@@ -68,6 +68,13 @@ export default function DashboardScreen() {
           <Attrition steps={steps} total={agents.length} />
         </section>
 
+        {/* The trend belongs beside the headline: the number only means
+            something against the last run's number. */}
+        <section>
+          <SectionLabel>Past runs for this store</SectionLabel>
+          <History storeUrl={input.storeUrl} />
+        </section>
+
         {/* One line of context, rather than four tiles competing with the hero. */}
         <p className={styles.context}>
           {catalogueCount} products read
@@ -83,11 +90,6 @@ export default function DashboardScreen() {
             <SurfaceRadar surfaces={surfaces} />
           </section>
         ) : null}
-
-        <section>
-          <SectionLabel>Past runs for this store</SectionLabel>
-          <History storeUrl={input.storeUrl} />
-        </section>
       </div>
     </div>
   );

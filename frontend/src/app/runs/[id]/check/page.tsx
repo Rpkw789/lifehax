@@ -143,6 +143,49 @@ export default function CheckScreen() {
         running={running}
       />
 
+      {/*
+        The old right-hand console lived here. Its content is the browser
+        column's own output, so it now renders inside that column's tiles, and
+        these last few lines are what the whole population is doing — which is
+        the first thing worth seeing, so it leads the page.
+      */}
+      <SectionLabel className={styles.boardLabel}>
+        Agent log · {events.length} events
+      </SectionLabel>
+      <div className={styles.log}>
+        {events
+          .slice(-8)
+          .reverse()
+          // Index into the full stream, not the composite: `t` is a 140ms tick,
+          // so one agent failing twice inside a window produces two events that
+          // are identical on every field the key used.
+          .map((event, i) => (
+            <div
+              key={events.length - 1 - i}
+              className={styles.logEntry}
+            >
+              <span className={styles.logTime}>{elapsedLabel(event.t)}</span>
+              <span
+                className={styles.logBadge}
+                style={{
+                  background:
+                    agents.find((a) => a.id === event.agentId)?.persona.color ??
+                    "var(--border-strong)",
+                }}
+              >
+                {event.agentId}
+              </span>
+              <span
+                className={`${styles.logMessage} ${
+                  event.kind === "fail" ? styles.logMessageFail : ""
+                }`}
+              >
+                {logText(event)}
+              </span>
+            </div>
+          ))}
+      </div>
+
       {/* The three probe feeds are text and read fine narrow; the agent tiles
           carry live video and were being squeezed into a quarter of the row. */}
       <div className={styles.feeds}>
@@ -300,48 +343,6 @@ export default function CheckScreen() {
             </div>
           </div>
         ))}
-      </div>
-
-      {/*
-        The old right-hand console lived here. Its content is the browser
-        column's own output, so it now renders inside that column's tiles and
-        the last few lines are kept below for the whole population.
-      */}
-      <SectionLabel className={styles.boardLabel}>
-        Agent log · {events.length} events
-      </SectionLabel>
-      <div className={styles.log}>
-        {events
-          .slice(-8)
-          .reverse()
-          // Index into the full stream, not the composite: `t` is a 140ms tick,
-          // so one agent failing twice inside a window produces two events that
-          // are identical on every field the key used.
-          .map((event, i) => (
-            <div
-              key={events.length - 1 - i}
-              className={styles.logEntry}
-            >
-              <span className={styles.logTime}>{elapsedLabel(event.t)}</span>
-              <span
-                className={styles.logBadge}
-                style={{
-                  background:
-                    agents.find((a) => a.id === event.agentId)?.persona.color ??
-                    "var(--border-strong)",
-                }}
-              >
-                {event.agentId}
-              </span>
-              <span
-                className={`${styles.logMessage} ${
-                  event.kind === "fail" ? styles.logMessageFail : ""
-                }`}
-              >
-                {logText(event)}
-              </span>
-            </div>
-          ))}
       </div>
     </div>
   );
