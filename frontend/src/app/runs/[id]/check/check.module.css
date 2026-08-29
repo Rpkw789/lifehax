@@ -354,6 +354,35 @@
 }
 
 /* The population-wide agent log, folded down from the old sidebar console. */
+/* The label and its toggle share a baseline, so the label keeps its margins. */
+.logHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logToggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  cursor: pointer;
+}
+
+.logToggle:hover {
+  color: var(--ink);
+}
+
+.logToggle:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
 .log {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -362,6 +391,15 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+
+/*
+ * Expanded, the log scrolls in place rather than growing. It leads the page,
+ * so a long run would otherwise push the surfaces below it off the screen.
+ */
+.logOpen {
+  max-height: 340px;
+  overflow-y: auto;
 }
 
 .logEntry {

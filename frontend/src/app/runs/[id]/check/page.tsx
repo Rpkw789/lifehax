@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/Button";
@@ -27,6 +27,12 @@ const SURFACE_COLORS: Record<string, string> = {
   search: "#7c3aed",
 };
 
+/**
+ * Log lines shown before expanding. Eight is about what fits without the log
+ * crowding out the surfaces below it, which are the point of the screen.
+ */
+const COLLAPSED_LOG_LINES = 8;
+
 export default function CheckScreen() {
   const router = useRouter();
   const {
@@ -48,6 +54,7 @@ export default function CheckScreen() {
     checkResult,
   } = useRun();
   const started = useRef(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   // Landing on this URL directly should start a run rather than sit dead — but
   // only once the id has been looked up. A URL naming a saved run is a request
@@ -150,12 +157,24 @@ export default function CheckScreen() {
         these last few lines are what the whole population is doing — which is
         the first thing worth seeing, so it leads the page.
       */}
-      <SectionLabel className={styles.boardLabel}>
-        Agent log · {events.length} events
-      </SectionLabel>
-      <div className={styles.log}>
+      <div className={styles.logHead}>
+        <SectionLabel className={styles.boardLabel}>
+          Agent log · {events.length} events
+        </SectionLabel>
+        {events.length > COLLAPSED_LOG_LINES ? (
+          <button
+            type="button"
+            className={styles.logToggle}
+            onClick={() => setLogOpen((open) => !open)}
+            aria-expanded={logOpen}
+          >
+            {logOpen ? "Show fewer" : `Show all ${events.length}`}
+          </button>
+        ) : null}
+      </div>
+      <div className={`${styles.log} ${logOpen ? styles.logOpen : ""}`}>
         {events
-          .slice(-8)
+          .slice(logOpen ? 0 : -COLLAPSED_LOG_LINES)
           .reverse()
           // Index into the full stream, not the composite: `t` is a 140ms tick,
           // so one agent failing twice inside a window produces two events that
