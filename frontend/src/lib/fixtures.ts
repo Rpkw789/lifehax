@@ -7,7 +7,10 @@
  * match (see `types.ts`).
  */
 
-import type { AgentPlan, Finding, Persona, StageName } from "./types";
+import type { Finding } from "@contracts/finding";
+import findingsFixture from "@fixtures/findings.example.json";
+
+import type { AgentPlan, Persona, StageName } from "./types";
 
 /** The six journey stages, in order. */
 export const STAGES: readonly StageName[] = [
@@ -206,96 +209,8 @@ export const SURFACE_SCORES: readonly {
   },
 ];
 
-/** The six findings, ordered by agents unblocked. */
-export const FINDINGS: readonly Finding[] = [
-  {
-    key: "i0",
-    severity: "critical",
-    title: "No agent-commerce endpoint exists",
-    evidence:
-      "All 10 agents fell back to browsing the site by pixels. /.well-known/agent-commerce and /.well-known/ucp both returned 404.",
-    fix: "Publish a manifest describing your catalog, search and checkout intents. Agents that speak the protocol skip your UI entirely, which removes the whole class of DOM failures below.",
-    impact: "+4 agents",
-    surface: "Agent protocol",
-    effort: "2–3 days",
-    owner: "Platform",
-    snippetLabel: "/.well-known/agent-commerce",
-    snippet:
-      '{\n  "version": "0.2",\n  "catalog": "/api/agent/catalog",\n  "search": "/api/agent/search",\n  "checkout": { "intent": "/api/agent/checkout",\n                 "guest": true },\n  "payment": ["card_token", "delegated_mandate"]\n}',
-  },
-  {
-    key: "i1",
-    severity: "high",
-    title: "Product facts only exist in images and client-side JS",
-    evidence:
-      "A03 and A04 read the page and found title and stock, but 5 of 7 required attributes were baked into product photos; price arrived after hydration and was absent from the served HTML.",
-    fix: "Emit Product + Offer JSON-LD server-side, with one additionalProperty per spec you expect a buyer to filter on. Keep the price in the initial HTML.",
-    impact: "+2 agents",
-    surface: "Structured data",
-    effort: "1 day",
-    owner: "Web",
-    snippetLabel: "Product JSON-LD",
-    snippet:
-      '"offers": { "@type": "Offer",\n  "price": "118.00",\n  "priceCurrency": "USD",\n  "availability": "InStock" },\n"additionalProperty": [\n  { "name": "diameter", "value": "40mm" },\n  { "name": "finish", "value": "matte black" },\n  { "name": "dimmable", "value": "true" }\n]',
-  },
-  {
-    key: "i2",
-    severity: "high",
-    title: "Checkout requires an account, and captcha fires on headless agents",
-    evidence:
-      "A08 reached the payment step and was redirected to /account/new. A10 was served a captcha interstitial after its user-agent was flagged.",
-    fix: "Allow guest checkout with a tokenized card, and allowlist verified agent user-agents so they get the standard flow instead of a challenge.",
-    impact: "+2 agents",
-    surface: "Checkout",
-    effort: "1 week",
-    owner: "Checkout",
-    snippetLabel: "Bot rule",
-    snippet:
-      "if (isVerifiedAgent(ua) && hasSignedIntent(req)) {\n  return next();   // skip challenge\n}",
-  },
-  {
-    key: "i3",
-    severity: "high",
-    title: "Add-to-cart is a JS-only widget with no form fallback",
-    evidence:
-      "A02 selected the right variant, then could not add it: the button is a div with a click handler and no accessible name, and there is no POST route to call directly.",
-    fix: "Keep the widget, but wrap it in a real form that posts variant and quantity. Give the control a stable name and a testable hook.",
-    impact: "+1 agent",
-    surface: "Website",
-    effort: "2 days",
-    owner: "Web",
-    snippetLabel: "Markup",
-    snippet:
-      '<form method="post" action="/cart/add">\n  <input name="variant" value="atl-1120-40-mb">\n  <input name="qty" value="1">\n  <button data-agent="add-to-cart">Add to cart</button>\n</form>',
-  },
-  {
-    key: "i4",
-    severity: "medium",
-    title: "Quantity is capped at 10 with no bulk path",
-    evidence:
-      "A07 asked for 40 units. The select maxes out at 10 and there is no visible route to a quote, so the agent abandoned at variant selection.",
-    fix: "Accept an arbitrary quantity input, and expose bulk terms as data rather than a contact form so an agent can act on them.",
-    impact: "+1 agent",
-    surface: "Website",
-    effort: "half day",
-    owner: "Web",
-    snippetLabel: "Field",
-    snippet:
-      '<input type="number" name="qty" min="1" max="999">\n<!-- bulk terms: /api/agent/quote -->',
-  },
-  {
-    key: "i5",
-    severity: "medium",
-    title: "12 of 40 sampled products are not discoverable",
-    evidence:
-      "A05 never reached the store: the SKUs it wanted are absent from sitemap.xml and return no result from external search.",
-    fix: "Regenerate the sitemap from the live catalog on publish, and serve a machine-readable product feed at a stable URL.",
-    impact: "+1 agent",
-    surface: "Discovery",
-    effort: "half day",
-    owner: "SEO",
-    snippetLabel: "Feed",
-    snippet:
-      "GET /feeds/products.xml\n  → 40/40 SKUs, updated hourly\nsitemap: include /products/* on publish hook",
-  },
-];
+/**
+ * Placeholder findings until the screen reads a real run. Sourced from the
+ * committed fixture so the frontend and backend cannot disagree about the shape.
+ */
+export const FINDINGS: readonly Finding[] = findingsFixture as unknown as Finding[];

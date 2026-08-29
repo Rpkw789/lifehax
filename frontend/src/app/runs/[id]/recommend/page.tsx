@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
+import { shoppersAffected } from "@contracts/finding";
+
 import { Button } from "@/components/Button";
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
@@ -161,13 +163,13 @@ export default function RecommendScreen() {
         </SectionLabel>
         <div className={styles.findings}>
           {FINDINGS.map((finding) => {
-            const open = !!openFindings[finding.key];
+            const open = !!openFindings[finding.finding_id];
             return (
-              <div key={finding.key} className={styles.finding}>
+              <div key={finding.finding_id} className={styles.finding}>
                 <button
                   type="button"
                   className={styles.findingHeader}
-                  onClick={() => toggleFinding(finding.key)}
+                  onClick={() => toggleFinding(finding.finding_id)}
                   aria-expanded={open}
                 >
                   <span
@@ -177,10 +179,14 @@ export default function RecommendScreen() {
                   </span>
                   <span className={styles.findingText}>
                     <span className={styles.findingTitle}>{finding.title}</span>
-                    <span className={styles.evidence}>{finding.evidence}</span>
+                    <span className={styles.evidence}>
+                      {finding.evidence.map((e) => e.fact).join(" ")}
+                    </span>
                   </span>
                   <span className={styles.findingMeta}>
-                    <span className={styles.impact}>{finding.impact}</span>
+                    <span className={styles.impact}>
+                      {`+${shoppersAffected(finding)} agents`}
+                    </span>
                     <Caret open={open} />
                   </span>
                 </button>
@@ -190,13 +196,15 @@ export default function RecommendScreen() {
                     <div className={styles.findingGrid}>
                       <div>
                         <SectionLabel>What to change</SectionLabel>
-                        <p className={styles.fix}>{finding.fix}</p>
+                        <p className={styles.fix}>
+                          {finding.recommendation.action}
+                        </p>
                         <div className={styles.metaPairs}>
                           {(
                             [
-                              ["Surface", finding.surface],
-                              ["Effort", finding.effort],
-                              ["Owner", finding.owner],
+                              ["Surface", finding.recommendation.surface],
+                              ["Effort", finding.recommendation.effort],
+                              ["Owner", finding.recommendation.owner],
                             ] as const
                           ).map(([key, value]) => (
                             <span key={key} className={styles.metaPair}>
@@ -207,8 +215,12 @@ export default function RecommendScreen() {
                         </div>
                       </div>
                       <div>
-                        <SectionLabel>{finding.snippetLabel}</SectionLabel>
-                        <pre className={styles.snippet}>{finding.snippet}</pre>
+                        <SectionLabel>
+                          {finding.recommendation.snippet_label}
+                        </SectionLabel>
+                        <pre className={styles.snippet}>
+                          {finding.recommendation.snippet}
+                        </pre>
                       </div>
                     </div>
                   </div>
