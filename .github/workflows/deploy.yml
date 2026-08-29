@@ -1,0 +1,85 @@
+# Auto-deploy both Render services on every push to main.
+#
+# Render's own auto-deploy cannot be used here: its GitHub App is not installed
+# on Rpkw789, so no webhook exists for this repo. This workflow runs inside the
+# repo instead and drives Render's REST API directly.
+#
+# Requires one repo secret, RENDER_API_KEY — an API key from
+# Render dashboard > Account Settings > API Keys. Do NOT use the token in
+# ~/.render/cli.yaml: that is a short-lived session token and it will expire.
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two deploys of the same service overlap; queue instead of cancel so
+# a superseded commit still finishes rather than leaving Render mid-update.
+concurrency:
+  group: render-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One service failing should not hide the other's result.
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            service_id: srv-da9af0ajnfac73d7dql0
+          - name: frontend
+            service_id: srv-da9af3qjnfac73d7e6r0
+    steps:
+      - name: Trigger deploy
+        id: trigger
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ matrix.service_id }}
+        run: |
+          set -euo pipefail
+          response=$(curl -sS -X POST \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          deploy_id=$(echo "$response" | jq -r '.id // empty')
+          if [ -z "$deploy_id" ]; then
+            echo "::error::could not trigger deploy: $response"
+            exit 1
+          fi
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+          echo "Triggered $deploy_id"
+
+      # Without this the job would go green the instant the deploy is queued.
+      # Both of this repo's first deploys built fine and then failed, so the
+      # only useful signal is the terminal status.
+      - name: Wait for it to finish
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ matrix.service_id }}
+          DEPLOY_ID: ${{ steps.trigger.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 80); do
+            status=$(curl -sS \
+              "https://api.render.com/v1/services/$SERVICE_ID/deploys/$DEPLOY_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY" | jq -r '.status')
+            echo "[$i] $status"
+            case "$status" in
+              live)
+                echo "::notice::${{ matrix.name }} is live"
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|pre_deploy_failed|deactivated)
+                echo "::error::${{ matrix.name }} deploy ended as $status — see https://dashboard.render.com/web/$SERVICE_ID"
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error::${{ matrix.name }} still not terminal after 20 minutes"
+          exit 1
