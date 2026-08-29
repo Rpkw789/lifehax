@@ -1,0 +1,276 @@
+/*
+ * Shared chrome for the three workspace screens — personas, past runs,
+ * settings. They are the same shape (a note, then a list of cards), so they
+ * share a stylesheet rather than three near-identical copies.
+ */
+.screen {
+  padding: 18px 22px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+/* A line of context under the header, and where a screen owns up to mocking. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--tertiary);
+}
+
+.sim {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 2px 5px;
+  flex: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--page);
+  padding: 13px 15px;
+}
+
+/* Personas: the brief's colour on the left edge, as everywhere else. */
+.personaCard {
+  border-left-width: 3px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.name {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--tertiary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+
+.count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tertiary);
+}
+
+/* The two agents that shop a brief, each linking to its own page. */
+.agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--ground);
+  text-decoration: none;
+}
+
+.agent:hover {
+  border-color: var(--border-strong);
+  background: var(--page);
+}
+
+.agentId {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.agentOutcome {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agentOutcomeFail {
+  color: var(--ink);
+}
+
+.agentBrief {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Past runs */
+.runRow {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 78px 78px 88px;
+  gap: 12px;
+  align-items: baseline;
+  padding: 11px 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--page);
+  text-decoration: none;
+}
+
+.runRowCurrent {
+  border-color: var(--ink);
+}
+
+.runRowHead {
+  border: 0;
+  background: transparent;
+  padding: 0 15px;
+}
+
+.headCell {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.runWhen,
+.runFigure {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tertiary);
+}
+
+.runStore {
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.runBadge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  padding: 2px 5px;
+  justify-self: start;
+}
+
+/* Settings */
+.settingLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 9px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+  align-items: baseline;
+}
+
+.field:first-of-type {
+  border-top: 0;
+}
+
+.fieldName {
+  font-size: 12.5px;
+  color: var(--secondary);
+}
+
+.fieldValue {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.fieldEmpty {
+  color: var(--faint);
+}
+
+.capability {
+  display: grid;
+  grid-template-columns: 11px 150px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+  align-items: baseline;
+}
+
+.capability:first-of-type {
+  border-top: 0;
+}
+
+.capDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  align-self: center;
+}
+
+.capNote {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--tertiary);
+}
+
+.caveat {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--hairline);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--tertiary);
+}
+
+.link {
+  color: var(--ink);
+}
