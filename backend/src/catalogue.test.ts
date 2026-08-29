@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { productUrlsFromSitemap } from "./catalogue";
+import { productUrlsFromSitemap, sitemapsDeclaredIn } from "./catalogue";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -137,5 +137,48 @@ describe("productUrlsFromSitemap", () => {
     expect(await productUrlsFromSitemap("https://shop.test", "")).toEqual([
       "https://shop.test/products/one",
     ]);
+  });
+});
+
+describe("sitemapsDeclaredIn", () => {
+  test("reads every Sitemap line, in the order the site gave them", () => {
+    expect(
+      sitemapsDeclaredIn(
+        "User-agent: *\nSitemap: https://shop.test/a.xml\nDisallow: /admin\nSitemap: https://shop.test/b.xml\n",
+        "https://shop.test",
+      ),
+    ).toEqual(["https://shop.test/a.xml", "https://shop.test/b.xml"]);
+  });
+
+  test("is case and whitespace insensitive, as robots.txt is in practice", () => {
+    expect(sitemapsDeclaredIn("  SITEMAP:   /s.xml  ", "https://shop.test")).toEqual([
+      "https://shop.test/s.xml",
+    ]);
+  });
+
+  test("resolves a relative path against the store origin", () => {
+    expect(sitemapsDeclaredIn("Sitemap: /deep/s.xml", "https://shop.test")).toEqual([
+      "https://shop.test/deep/s.xml",
+    ]);
+  });
+
+  test("skips a Sitemap line with no value", () => {
+    expect(sitemapsDeclaredIn("Sitemap:\nSitemap: /ok.xml", "https://shop.test")).toEqual([
+      "https://shop.test/ok.xml",
+    ]);
+  });
+
+  test("keeps a junk value as a relative path rather than throwing", () => {
+    // new URL() resolves almost anything against an origin, so junk becomes a
+    // path that simply 404s and falls through to the next candidate. Cheaper
+    // than validating, and it cannot lose a real sitemap listed after it.
+    expect(sitemapsDeclaredIn("Sitemap: ::::\nSitemap: /ok.xml", "https://shop.test")).toEqual([
+      "https://shop.test/::::",
+      "https://shop.test/ok.xml",
+    ]);
+  });
+
+  test("returns nothing for a robots.txt that declares none", () => {
+    expect(sitemapsDeclaredIn("User-agent: *\nDisallow:", "https://shop.test")).toEqual([]);
   });
 });

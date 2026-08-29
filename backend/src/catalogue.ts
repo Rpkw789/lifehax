@@ -69,14 +69,12 @@ export async function snapshot(
  *
  * This is how a store says where its sitemap actually is, and plenty do not
  * use /sitemap.xml — bose.com serves 404 there and names sitemap_index.xml
- * here, which is 207 products the crawler would otherwise never see.
+ * here, which is 207 products the crawler would otherwise never see. Pure, so
+ * the audit can reuse it against the robots.txt it has already fetched.
  */
-async function declaredSitemaps(origin: string): Promise<string[]> {
-  const res = await get(resolve(origin, "/robots.txt"));
-  if (!res.ok) return [];
-
+export function sitemapsDeclaredIn(robotsBody: string, origin: string): string[] {
   const out: string[] = [];
-  for (const line of res.body.split(/\r?\n/)) {
+  for (const line of robotsBody.split(/\r?\n/)) {
     const match = /^\s*sitemap\s*:\s*(\S+)\s*$/i.exec(line);
     if (!match) continue;
     try {
@@ -86,6 +84,11 @@ async function declaredSitemaps(origin: string): Promise<string[]> {
     }
   }
   return out;
+}
+
+async function declaredSitemaps(origin: string): Promise<string[]> {
+  const res = await get(resolve(origin, "/robots.txt"));
+  return res.ok ? sitemapsDeclaredIn(res.body, origin) : [];
 }
 
 /** Follows a sitemap index one level down. Returns product-looking URLs. */
