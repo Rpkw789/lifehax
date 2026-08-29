@@ -1,52 +1,71 @@
 import { describe, expect, test } from "bun:test";
-import type { CheckResult } from "@contracts/check-result";
-import checkResult from "@fixtures/check-result.example.json";
-import { funnelSteps } from "./funnel";
+import { ARCHETYPE_PERSONAS } from "./fixtures";
+import { funnelFromAgents } from "./funnel";
+import type { AgentState, StageNumber } from "./types";
 
-const source = checkResult as unknown as CheckResult;
+/** An agent that cleared `progress` stages, optionally blocked at `fail`. */
+function agent(id: string, progress: number, fail: 0 | StageNumber = 0, reason?: string): AgentState {
+  return {
+    id,
+    persona: ARCHETYPE_PERSONAS[0]!,
+    personaIndex: 0,
+    fail,
+    reason,
+    ceiling: fail === 0 ? 6 : fail - 1,
+    started: 0,
+    progress,
+    settled: true,
+    ok: fail === 0 && progress === 6,
+    blocked: fail !== 0,
+  };
+}
 
-describe("funnelSteps", () => {
-  test("narrows from every agent to the ones that recommended the product", () => {
-    expect(funnelSteps(source).map((s) => s.count)).toEqual([6, 4, 3, 2]);
+describe("funnelFromAgents", () => {
+  const agents = [
+    agent("A01", 6),
+    agent("A02", 4, 5, "add-to-cart is a JS-only widget"),
+    agent("A03", 2, 3, "specs live only inside product images"),
+    agent("A04", 2, 3, "specs live only inside product images"),
+    agent("A05", 0, 1, "no discovery feed"),
+  ];
+
+  test("starts with the whole cohort, then one row per stage", () => {
+    const steps = funnelFromAgents(agents);
+    expect(steps).toHaveLength(7);
+    expect(steps[0]!.label).toBe("Agents started");
+    expect(steps[0]!.count).toBe(5);
   });
 
-  test("reports how many agents were lost entering each step", () => {
-    expect(funnelSteps(source).map((s) => s.lost)).toEqual([0, 2, 1, 1]);
+  test("counts the agents that cleared each stage", () => {
+    // A05 cleared none; A03/A04 cleared 2; A02 cleared 4; A01 cleared all 6.
+    expect(funnelFromAgents(agents).map((s) => s.count)).toEqual([5, 4, 4, 2, 2, 1, 1]);
   });
 
-  test("names the dominant reason for each drop, and none for the first step", () => {
-    const [ran, found, confirmed, recommended] = funnelSteps(source);
-    expect(ran!.reason).toBeNull();
-    expect(found!.reason).toBe("not in search results");
-    expect(confirmed!.reason).toBe("price client side only");
-    expect(recommended!.reason).toBe("shipping info not found");
+  test("reports how many were lost entering each stage", () => {
+    expect(funnelFromAgents(agents).map((s) => s.lost)).toEqual([0, 1, 0, 2, 0, 1, 0]);
   });
 
-  test("ignores infrastructure failures when naming a reason, but still counts the agent as lost", () => {
-    // ar_006 reported only AGENT_TIMEOUT. It is lost at the discovery step, but
-    // a timeout is our problem, not the brand's, so it must not be the reason.
-    const found = funnelSteps(source)[1]!;
-    expect(found.lost).toBe(2);
-    expect(found.reason).not.toContain("timeout");
+  test("names the reason from the agents actually blocked there", () => {
+    const steps = funnelFromAgents(agents);
+    expect(steps[1]!.reason).toBe("no discovery feed");
+    expect(steps[3]!.reason).toBe("specs live only inside product images");
+    expect(steps[5]!.reason).toBe("add-to-cart is a JS-only widget");
   });
 
-  test("carries a fraction of the starting cohort for the track fill", () => {
-    expect(funnelSteps(source).map((s) => s.fraction)).toEqual([1, 4 / 6, 3 / 6, 2 / 6]);
+  test("has no reason where nobody was lost", () => {
+    const steps = funnelFromAgents(agents);
+    expect(steps[0]!.reason).toBeNull();
+    expect(steps[2]!.reason).toBeNull();
   });
 
-  test("survives a run where no agent found anything", () => {
-    const blind = structuredClone(source);
-    for (const run of blind.agent_runs) {
-      run.outcome.target_discovered = false;
-      run.outcome.target_identity_matched = false;
-      run.outcome.target_recommended = false;
-    }
-    expect(funnelSteps(blind).map((s) => s.count)).toEqual([6, 0, 0, 0]);
+  test("ignores agents still mid-run when naming a reason", () => {
+    const running = [agent("A01", 2, 3, "blocked"), { ...agent("A02", 1), settled: false }];
+    expect(funnelFromAgents(running)[3]!.reason).toBe("blocked");
   });
 
-  test("returns zeroed steps rather than dividing by zero when there are no runs", () => {
-    const empty = structuredClone(source);
-    empty.agent_runs = [];
-    expect(funnelSteps(empty).map((s) => s.fraction)).toEqual([0, 0, 0, 0]);
+  test("returns an all-zero funnel for no agents rather than dividing by zero", () => {
+    const steps = funnelFromAgents([]);
+    expect(steps.map((s) => s.count)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(steps.map((s) => s.fraction)).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });

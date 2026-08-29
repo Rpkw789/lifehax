@@ -4,15 +4,9 @@
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .tile { border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
 .tileValue { font-size: 32px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tileOf { color: var(--faint); font-size: 20px; font-weight: 500; }
 .tileLabel { font-size: 12px; color: var(--tertiary); margin-top: 6px; }
 
-.table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.table th { text-align: left; font-weight: 500; color: var(--tertiary); padding: 8px 12px; border-bottom: 1px solid var(--border); }
-.table td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
-.queryText { max-width: 460px; }
-.hit { color: #0b8a5d; font-weight: 500; }
-.miss { color: #d02a2a; font-weight: 500; }
-.rank { font-variant-numeric: tabular-nums; }
 
 .bars { display: flex; flex-direction: column; gap: 12px; }
 .bar { display: grid; grid-template-columns: 200px 1fr 48px; align-items: center; gap: 12px; font-size: 13px; }
@@ -22,4 +16,30 @@
 @media (max-width: 900px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
   .bar { grid-template-columns: 120px 1fr 40px; }
+}
+
+.empty {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-size: 15px;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.emptyBody {
+  font-size: 13px;
+  color: var(--tertiary);
+  margin: 0 0 16px;
+}
+
+.emptyLink {
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
