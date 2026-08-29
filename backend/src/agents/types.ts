@@ -24,12 +24,21 @@ export interface WebSearchRequest {
   query: string;
   locale: string;
   currency: string;
+  storeOrigin: string;
+  fetchPage: (url: string, signal: AbortSignal) => Promise<{ url: string; status: number; body: string }>;
   signal: AbortSignal;
+}
+
+export interface FetchedPage {
+  url: string;
+  status: number | null;
+  body: string | null;
 }
 
 export interface WebSearchResponse {
   proposal: ShopperProposal;
   citations: SearchCitation[];
+  fetchedPages: Array<Omit<FetchedPage, "body">>;
   latencyMs: number;
 }
 
@@ -41,6 +50,8 @@ export interface RunContext {
   runId: string;
   locale: string;
   currency: string;
+  storeOrigin: string;
+  fetchPage: WebSearchRequest["fetchPage"];
   signal: AbortSignal;
 }
 
@@ -55,6 +66,7 @@ export type AgentEvent =
   | (AgentEventBase & { type: "agent.query"; query: string })
   | (AgentEventBase & { type: "agent.api"; endpoint: string; latency_ms: number })
   | (AgentEventBase & { type: "agent.citation"; title: string; url: string; position: number })
+  | (AgentEventBase & { type: "agent.fetch"; url: string; status: number | null; error_code: "FETCH_FAILED" | null })
   | (AgentEventBase & { type: "agent.verdict"; proposal: ShopperProposal });
 
 export interface ShopperAgent {

@@ -84,10 +84,14 @@ export async function snapshotStore(input: SnapshotInput): Promise<StoreSnapshot
   const discoveredProducts = discovered.documents
     .map((document) => ({ document, product: successful(document) ? extractProduct(document.body, document.url) : null }))
     .filter((entry): entry is { document: FetchedDocument; product: NonNullable<typeof entry.product> } => entry.product !== null);
-  const productsById = new Map(feedProducts.map((product) => [product.target.product_id, product]));
-  productsById.set(extracted.target.product_id, extracted);
-  for (const entry of discoveredProducts) productsById.set(entry.product.target.product_id, entry.product);
-  const products = [...productsById.values()];
+  const productsByUrl = new Map(feedProducts.map((product) => [resourceKey(product.target.canonical_url), product]));
+  productsByUrl.set(resourceKey(extracted.target.canonical_url), extracted);
+  for (const entry of discoveredProducts) {
+    const key = resourceKey(entry.product.target.canonical_url);
+    const feedProduct = productsByUrl.get(key);
+    productsByUrl.set(key, feedProduct ? mergeProduct(entry.product, feedProduct) : entry.product);
+  }
+  const products = [...productsByUrl.values()];
 
   const probes = {
     llms_txt: probe(llms),
@@ -191,6 +195,11 @@ function sameResource(left: string, right: string): boolean {
   } catch {
     return false;
   }
+}
+
+function resourceKey(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  return `${url.origin}${trimSlash(url.pathname)}`;
 }
 
 function trimSlash(path: string): string {

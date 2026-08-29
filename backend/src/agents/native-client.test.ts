@@ -19,11 +19,19 @@ test("AnthropicNativeSearchClient separates cited search from structured ranking
     },
   });
 
-  const result = await client.recommend({ query: "Find an option", locale: "en-SG", currency: "SGD", signal: new AbortController().signal });
+  const result = await client.recommend({
+    query: "Find an option",
+    locale: "en-SG",
+    currency: "SGD",
+    storeOrigin: "https://shop.example",
+    fetchPage: async (url) => ({ url, status: 200, body: "Available now" }),
+    signal: new AbortController().signal,
+  });
 
   assert.equal(requests.length, 2);
   assert.equal("output_config" in (requests[0] ?? {}), false);
   assert.equal("tools" in (requests[1] ?? {}), false);
   assert.equal(result.citations[0]?.url, "https://shop.example/items/alpha");
+  assert.deepEqual(result.fetchedPages, [{ url: "https://shop.example/items/alpha", status: 200 }]);
   assert.equal(result.proposal.purchase_intent, "medium");
 });

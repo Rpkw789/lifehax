@@ -6,6 +6,7 @@ import { CloudflareWebSearchClient } from "./cloudflare.ts";
 test("CloudflareWebSearchClient separates cited search from structured ranking", async () => {
   let requestUrl = "";
   const requestBodies: Array<Record<string, unknown>> = [];
+  const fetched: string[] = [];
   const client = new CloudflareWebSearchClient({
     accountId: "account",
     apiToken: "secret-token",
@@ -16,7 +17,17 @@ test("CloudflareWebSearchClient separates cited search from structured ranking",
     },
   });
 
-  const result = await client.recommend({ query: "Find an option", locale: "en-SG", currency: "SGD", signal: new AbortController().signal });
+  const result = await client.recommend({
+    query: "Find an option",
+    locale: "en-SG",
+    currency: "SGD",
+    storeOrigin: "https://shop.example",
+    fetchPage: async (url) => {
+      fetched.push(url);
+      return { url, status: 200, body: "Price: 20 SGD" };
+    },
+    signal: new AbortController().signal,
+  });
 
   assert.equal(requestUrl, "https://api.cloudflare.com/client/v4/accounts/account/ai/v1/messages");
   assert.equal(requestBodies.length, 2);
@@ -26,6 +37,9 @@ test("CloudflareWebSearchClient separates cited search from structured ranking",
   assert.equal("tools" in (requestBodies[1] ?? {}), false);
   assert.equal((requestBodies[1]?.output_config as { format: { type: string } }).format.type, "json_schema");
   assert.equal(result.citations[0]?.url, "https://shop.example/items/alpha");
+  assert.deepEqual(fetched, ["https://shop.example/items/alpha"]);
+  assert.deepEqual(result.fetchedPages, [{ url: "https://shop.example/items/alpha", status: 200 }]);
+  assert.match(JSON.stringify(requestBodies[1]), /Price: 20 SGD/);
   assert.equal(result.proposal.candidates[0]?.name, "Alpha");
 });
 

@@ -112,6 +112,7 @@ export async function runSimulation(
             index,
             dependencies.agent,
             snapshot,
+            dependencies.fetcher,
             now,
             attemptSignal,
           ),
@@ -177,6 +178,7 @@ async function runAgentAttempt(
   index: number,
   agent: ShopperAgent,
   snapshot: StoreSnapshot,
+  fetcher: DocumentFetcher,
   now: () => Date,
   signal: AbortSignal,
 ): Promise<CompletedAgent> {
@@ -186,6 +188,8 @@ async function runAgentAttempt(
     runId: input.run_id,
     locale: input.locale,
     currency: input.currency,
+    storeOrigin: new URL(input.store_url).origin,
+    fetchPage: (url, fetchSignal) => fetcher.get(url, fetchSignal),
     signal,
   })) {
     events.push(event);
@@ -195,7 +199,10 @@ async function runAgentAttempt(
   const citations = events
     .filter((event): event is Extract<AgentEvent, { type: "agent.citation" }> => event.type === "agent.citation")
     .map((event) => ({ title: event.title, url: event.url }));
-  const fetchedUrls: string[] = [];
+  const fetchedUrls = events
+    .filter((event): event is Extract<AgentEvent, { type: "agent.fetch" }> => event.type === "agent.fetch")
+    .filter((event) => event.status !== null && event.status >= 200 && event.status < 300)
+    .map((event) => event.url);
   const observations = deriveObservations(snapshot, verdict.proposal, fetchedUrls);
   const matched = matchProposal({
     brandDomain: new URL(input.store_url).hostname,
@@ -208,7 +215,9 @@ async function runAgentAttempt(
   const evidence = eventEvidence(events, brief.query_id, now);
   const durationMs = Math.max(0, now().getTime() - started.getTime());
   const webEvidenceIds = evidence.filter((item) => item.kind === "search_result" || item.kind === "api_call").map((item) => item.evidence_id);
-  const storeEvidenceIds: string[] = [];
+  const storeEvidenceIds = evidence
+    .filter((item) => item.kind === "fetch" && item.url && item.status !== null && item.status >= 200 && item.status < 300 && belongsToDomain(item.url, input.store_url))
+    .map((item) => item.evidence_id);
 
   return {
     events,
@@ -297,6 +306,7 @@ function deriveObservations(snapshot: StoreSnapshot, proposal: ShopperProposal, 
 function eventEvidence(events: AgentEvent[], queryId: string, now: () => Date): Evidence[] {
   let citation = 0;
   let api = 0;
+  let fetch = 0;
   const evidence: Evidence[] = [];
   for (const event of events) {
     if (event.type === "agent.citation") {
@@ -320,6 +330,18 @@ function eventEvidence(events: AgentEvent[], queryId: string, now: () => Date): 
         url: null,
         status: null,
         summary: `${event.endpoint} completed in ${event.latency_ms}ms`,
+        excerpt: null,
+      });
+    }
+    if (event.type === "agent.fetch") {
+      fetch += 1;
+      evidence.push({
+        evidence_id: `ev_${queryId}_fetch_${String(fetch).padStart(2, "0")}`,
+        kind: "fetch",
+        at: now().toISOString(),
+        url: event.url,
+        status: event.status,
+        summary: event.status === null ? "Shopper page fetch failed" : `Shopper fetched page with HTTP ${event.status}`,
         excerpt: null,
       });
     }

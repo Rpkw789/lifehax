@@ -14,6 +14,9 @@ test("runSimulation passes one valid CheckResult to the result sink", async () =
   assertCheckResult(result);
   assert.equal(result.agent_runs.length, 2);
   assert.equal(result.scores.hit_rate, 0.5);
+  assert.deepEqual(result.agent_runs[0]?.outcome.our_pages_fetched, ["https://shop.example/items/alpha"]);
+  assert.equal(result.agent_runs[0]?.observations.price_found, true);
+  assert.equal(result.agent_runs[0]?.journey.stages[0]?.status, "completed");
   assert.equal(saved.length, 1);
   assert.deepEqual(saved[0], result);
 });
@@ -120,6 +123,7 @@ function successfulAgent(): ShopperAgent {
       const target = brief.query_id === "q_001";
       yield { type: "agent.query", run_id: context.runId, query_id: brief.query_id, agent_id: `agent_${brief.query_id}`, agent_kind: "shared-search", query: brief.query };
       yield { type: "agent.citation", run_id: context.runId, query_id: brief.query_id, agent_id: `agent_${brief.query_id}`, agent_kind: "shared-search", title: target ? "Alpha" : "Other", url: target ? "https://shop.example/items/alpha" : "https://other.example/item", position: 1 };
+      if (target) yield { type: "agent.fetch", run_id: context.runId, query_id: brief.query_id, agent_id: `agent_${brief.query_id}`, agent_kind: "shared-search", url: "https://shop.example/items/alpha", status: 200, error_code: null };
       yield { type: "agent.verdict", run_id: context.runId, query_id: brief.query_id, agent_id: `agent_${brief.query_id}`, agent_kind: "shared-search", proposal: { candidates: [{ name: target ? "Alpha" : "Other", url: target ? "https://shop.example/items/alpha" : "https://other.example/item", reason_codes: [] }], purchase_intent: "medium", confidence: 0.7 } };
     },
   };

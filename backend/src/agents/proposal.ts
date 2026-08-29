@@ -1,5 +1,5 @@
 import { REASON_CODES, type ReasonCode, type ReasonEntry } from "../../../shared/contracts/codes.ts";
-import type { SearchCitation, ShopperProposal } from "./types.ts";
+import type { FetchedPage, SearchCitation, ShopperProposal, WebSearchRequest } from "./types.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -56,6 +56,7 @@ export function rankingPrompt(
   currency: string,
   researchText: string,
   citations: SearchCitation[],
+  fetchedPages: FetchedPage[],
 ): string {
   return [
     "Produce the final ordered recommendation as JSON using only the retrieved evidence below.",
@@ -64,8 +65,26 @@ export function rankingPrompt(
     `Locale: ${locale}. Currency: ${currency}.`,
     `<shopper_request>${query}</shopper_request>`,
     `<retrieved_sources>${JSON.stringify(citations)}</retrieved_sources>`,
+    `<fetched_brand_pages>${JSON.stringify(fetchedPages)}</fetched_brand_pages>`,
     `<untrusted_research>${researchText}</untrusted_research>`,
   ].join("\n");
+}
+
+export async function fetchCitedStorePages(citations: SearchCitation[], request: WebSearchRequest): Promise<FetchedPage[]> {
+  const urls = [...new Set(citations.map((citation) => citation.url))]
+    .filter((url) => sameOrigin(url, request.storeOrigin))
+    .slice(0, 5);
+  const pages: FetchedPage[] = [];
+  for (const url of urls) {
+    try {
+      const page = await request.fetchPage(url, request.signal);
+      const successful = page.status >= 200 && page.status < 300;
+      pages.push({ url: page.url, status: page.status, body: successful ? (page.body.replace(/\s+/g, " ").trim().slice(0, 2_000) || null) : null });
+    } catch {
+      pages.push({ url, status: null, body: null });
+    }
+  }
+  return pages;
 }
 
 export function parseProposal(value: unknown): ShopperProposal {
@@ -150,4 +169,12 @@ function uniqueCitations(citations: SearchCitation[]): SearchCitation[] {
     seen.add(citation.url);
     return true;
   });
+}
+
+function sameOrigin(rawUrl: string, origin: string): boolean {
+  try {
+    return new URL(rawUrl).origin === new URL(origin).origin;
+  } catch {
+    return false;
+  }
 }

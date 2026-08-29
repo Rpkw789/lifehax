@@ -23,11 +23,17 @@ export abstract class BaseSearchAgent implements ShopperAgent {
       query: brief.query,
       locale: context.locale,
       currency: context.currency,
+      storeOrigin: context.storeOrigin,
+      fetchPage: context.fetchPage,
       signal: context.signal,
     });
     yield { ...base, type: "agent.api", endpoint: this.endpoint, latency_ms: response.latencyMs };
     for (const [index, citation] of response.citations.entries()) {
       yield { ...base, type: "agent.citation", ...citation, position: index + 1 };
+    }
+    for (const page of response.fetchedPages) {
+      const failed = page.status === null || page.status < 200 || page.status >= 300;
+      yield { ...base, type: "agent.fetch", ...page, error_code: failed ? "FETCH_FAILED" : null };
     }
     yield { ...base, type: "agent.verdict", proposal: response.proposal };
   }

@@ -20,6 +20,7 @@ const client: WebSearchClient = {
     return {
       latencyMs: 12,
       citations: [{ title: "Alpha", url: "https://shop.example/items/alpha" }],
+      fetchedPages: [{ url: "https://shop.example/items/alpha", status: 200 }],
       proposal: {
         candidates: [{ name: "Alpha", url: "https://shop.example/items/alpha", reason_codes: [{ code: "PRICE_MATCH" }] }],
         purchase_intent: "high",
@@ -29,10 +30,10 @@ const client: WebSearchClient = {
   },
 };
 
-test("SharedSearchAgent streams query, API, citation, and verdict events", async () => {
+test("SharedSearchAgent streams query, API, citation, fetch, and verdict events", async () => {
   const events = await collect(new SharedSearchAgent(client).run(brief, context()));
 
-  assert.deepEqual(events.map((event) => event.type), ["agent.query", "agent.api", "agent.citation", "agent.verdict"]);
+  assert.deepEqual(events.map((event) => event.type), ["agent.query", "agent.api", "agent.citation", "agent.fetch", "agent.verdict"]);
   assert.equal(events.at(-1)?.agent_kind, "shared-search");
 });
 
@@ -42,7 +43,14 @@ test("NativeSearchAgent uses the same event contract with a native kind", async 
 });
 
 function context() {
-  return { runId: "run_1", locale: "en-SG", currency: "SGD", signal: new AbortController().signal };
+  return {
+    runId: "run_1",
+    locale: "en-SG",
+    currency: "SGD",
+    storeOrigin: "https://shop.example",
+    fetchPage: async (url: string) => ({ url, status: 200, body: "Alpha" }),
+    signal: new AbortController().signal,
+  };
 }
 
 async function collect(iterable: AsyncIterable<unknown>): Promise<Array<Record<string, unknown>>> {

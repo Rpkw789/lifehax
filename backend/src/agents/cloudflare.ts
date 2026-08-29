@@ -1,5 +1,5 @@
 import type { MessageCreateParams } from "@anthropic-ai/sdk/resources/messages/messages";
-import { parseAnthropicProposalContent, parseAnthropicResearch, rankingPrompt, SHOPPER_OUTPUT_SCHEMA, shopperPrompt } from "./proposal.ts";
+import { fetchCitedStorePages, parseAnthropicProposalContent, parseAnthropicResearch, rankingPrompt, SHOPPER_OUTPUT_SCHEMA, shopperPrompt } from "./proposal.ts";
 import type { WebSearchClient, WebSearchRequest, WebSearchResponse } from "./types.ts";
 
 interface CloudflareOptions {
@@ -28,13 +28,15 @@ export class CloudflareWebSearchClient implements WebSearchClient {
       request.signal,
     );
     const research = parseAnthropicResearch(researchContent);
+    const fetchedPages = await fetchCitedStorePages(research.citations, request);
     const proposalContent = await this.#send(
-      rankingMessageParams("anthropic/claude-opus-4.8", request, research.researchText, research.citations, true),
+      rankingMessageParams("anthropic/claude-opus-4.8", request, research.researchText, research.citations, fetchedPages, true),
       request.signal,
     );
     return {
       proposal: parseAnthropicProposalContent(proposalContent),
       citations: research.citations,
+      fetchedPages: fetchedPages.map(({ url, status }) => ({ url, status })),
       latencyMs: Math.max(0, Math.round(performance.now() - started)),
     };
   }
@@ -70,6 +72,7 @@ export function rankingMessageParams(
   request: WebSearchRequest,
   researchText: string,
   citations: WebSearchResponse["citations"],
+  fetchedPages: Parameters<typeof rankingPrompt>[5],
   stream: boolean,
 ): MessageCreateParams {
   return {
@@ -77,7 +80,7 @@ export function rankingMessageParams(
     max_tokens: 8_000,
     stream,
     thinking: { type: "adaptive" },
-    messages: [{ role: "user", content: rankingPrompt(request.query, request.locale, request.currency, researchText, citations) }],
+    messages: [{ role: "user", content: rankingPrompt(request.query, request.locale, request.currency, researchText, citations, fetchedPages) }],
     output_config: { format: { type: "json_schema", schema: SHOPPER_OUTPUT_SCHEMA } },
   };
 }

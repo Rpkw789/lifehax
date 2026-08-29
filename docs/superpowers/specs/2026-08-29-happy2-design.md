@@ -59,7 +59,8 @@ Both stream the same `AgentEvent` type, so the live feed, persistence, and
 scoring are implementation-agnostic.
 
 Each shopper uses two streamed requests: the first runs hosted web search and
-collects citations; the second turns that retrieved evidence into the
+collects citations. Same-origin cited pages are fetched through the guarded
+store fetcher, then the second request turns that evidence into the
 schema-constrained recommendation list. Anthropic citations and structured
 outputs cannot be requested together, and deterministic matching accepts only
 candidate URLs backed by citations from the first request.

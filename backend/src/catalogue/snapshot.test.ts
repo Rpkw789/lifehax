@@ -77,12 +77,15 @@ test("snapshotStore checks robots before fetching the target and stops when disa
 
 test("snapshotStore discovers a JSON feed when the target page has no product fields", async () => {
   const feedUrl = `${storeUrl}/catalogue.json`;
+  const secondUrl = `${storeUrl}/items/beta`;
   const responses = new Map<string, FetchedDocument>([
     [targetUrl, doc(targetUrl, 200, `<link rel="alternate" type="application/json" href="${feedUrl}">`)],
     [feedUrl, doc(feedUrl, 200, JSON.stringify({ products: [
       { id: "A-1", name: "Alpha", url: targetUrl, price: { amount: 20, currency: "SGD" }, availability: "in_stock" },
-      { id: "B-2", name: "Beta", url: `${storeUrl}/items/beta` },
+      { id: "B-2", name: "Beta", url: secondUrl, price: { amount: 25, currency: "SGD" } },
     ] }), "application/json")],
+    [secondUrl, doc(secondUrl, 200, `<meta property="og:title" content="Beta"><meta property="og:url" content="${secondUrl}">`)],
+    [`${storeUrl}/sitemap.xml`, doc(`${storeUrl}/sitemap.xml`, 200, `<urlset><url><loc>${targetUrl}</loc></url><url><loc>${secondUrl}</loc></url></urlset>`, "application/xml")],
     [`${storeUrl}/robots.txt`, doc(`${storeUrl}/robots.txt`, 200, "User-agent: *\nAllow: /", "text/plain")],
   ]);
   const fetcher: DocumentFetcher = { async get(url) { return responses.get(url) ?? doc(url, 404, ""); } };
@@ -94,6 +97,8 @@ test("snapshotStore discovers a JSON feed when the target page has no product fi
   assert.deepEqual(result.targetProduct.price, { amount: 20, currency: "SGD" });
   assert.equal(result.catalogueSnapshot.target_field_sources.name, "feed");
   assert.equal(result.catalogueSnapshot.products_readable, 2);
+  assert.equal(result.siteAudit.structured_data.products_total, 2);
+  assert.equal(result.siteAudit.structured_data.products_with_offer, 2);
   assert.equal(result.evidence.some((item) => item.url === feedUrl && item.kind === "fetch"), true);
 });
 

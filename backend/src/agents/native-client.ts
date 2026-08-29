@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParams } from "@anthropic-ai/sdk/resources/messages/messages";
 import { rankingMessageParams, webSearchMessageParams } from "./cloudflare.ts";
-import { parseAnthropicProposalContent, parseAnthropicResearch } from "./proposal.ts";
+import { fetchCitedStorePages, parseAnthropicProposalContent, parseAnthropicResearch } from "./proposal.ts";
 import type { WebSearchClient, WebSearchRequest, WebSearchResponse } from "./types.ts";
 
 export type StreamMessage = (params: MessageCreateParams, signal: AbortSignal) => Promise<unknown>;
@@ -29,14 +29,16 @@ export class AnthropicNativeSearchClient implements WebSearchClient {
     const researchMessage = await this.#streamMessage(webSearchMessageParams("claude-opus-5", request, true), request.signal);
     if (!isObject(researchMessage)) throw new Error("Anthropic returned an invalid search message");
     const research = parseAnthropicResearch(researchMessage.content);
+    const fetchedPages = await fetchCitedStorePages(research.citations, request);
     const proposalMessage = await this.#streamMessage(
-      rankingMessageParams("claude-opus-5", request, research.researchText, research.citations, true),
+      rankingMessageParams("claude-opus-5", request, research.researchText, research.citations, fetchedPages, true),
       request.signal,
     );
     if (!isObject(proposalMessage)) throw new Error("Anthropic returned an invalid ranking message");
     return {
       proposal: parseAnthropicProposalContent(proposalMessage.content),
       citations: research.citations,
+      fetchedPages: fetchedPages.map(({ url, status }) => ({ url, status })),
       latencyMs: Math.max(0, Math.round(performance.now() - started)),
     };
   }
