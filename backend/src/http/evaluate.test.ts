@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { loadExampleCheckResult } from "../fixtures";
 import { openFindingsStore } from "../store/findings";
+import type { FindingsStore } from "../store/findings";
 import { createEvaluateRoutes } from "./evaluate";
 
 function app() {
@@ -50,5 +51,25 @@ describe("POST /runs/:id/evaluate", () => {
       body: JSON.stringify(loadExampleCheckResult()),
     });
     expect(store.load("run_7")!.length).toBe(6);
+  });
+
+  test("returns the standard error shape when persistence fails", async () => {
+    const brokenStore: FindingsStore = {
+      save() {
+        throw new Error("disk unavailable");
+      },
+      load() {
+        return null;
+      },
+    };
+    const res = await createEvaluateRoutes(brokenStore).request("/runs/run_1/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(loadExampleCheckResult()),
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error.code).toBe("persistence_failed");
+    expect(body.error.message).toBeTruthy();
   });
 });

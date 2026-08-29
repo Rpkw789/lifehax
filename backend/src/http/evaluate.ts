@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { validateCheckResult } from "@contracts/validate";
-import type { CheckResult } from "@contracts/check-result";
+import { assertCheckResult, validateCheckResult } from "@contracts/validate";
+import type { Finding } from "@contracts/finding";
 import { evaluate } from "../evaluate/evaluate";
 import type { FindingsStore } from "../store/findings";
 import { jsonError } from "./errors";
@@ -16,6 +16,8 @@ export function createEvaluateRoutes(store: FindingsStore): Hono {
       return jsonError(c, 400, "invalid_json", "Request body is not valid JSON");
     }
 
+    // validateCheckResult first, because its error list is what the 422 reports;
+    // assertCheckResult then narrows the type without a cast.
     const errors = validateCheckResult(body);
     if (errors.length > 0) {
       return jsonError(
@@ -26,9 +28,33 @@ export function createEvaluateRoutes(store: FindingsStore): Hono {
         errors,
       );
     }
+    assertCheckResult(body);
 
-    const findings = evaluate(body as CheckResult);
-    store.save(c.req.param("id"), findings);
+    // evaluate() asserts its own output, so a defect in a rule throws here.
+    // Surfacing the reason beats a bare 500 — the message names the offending field.
+    let findings: Finding[];
+    try {
+      findings = evaluate(body);
+    } catch (error) {
+      return jsonError(
+        c,
+        500,
+        "evaluation_failed",
+        error instanceof Error ? error.message : "Evaluation produced an invalid result",
+      );
+    }
+
+    try {
+      store.save(c.req.param("id"), findings);
+    } catch (error) {
+      return jsonError(
+        c,
+        500,
+        "persistence_failed",
+        error instanceof Error ? error.message : "Could not persist the findings",
+      );
+    }
+
     return c.json({ findings });
   });
 
