@@ -13,6 +13,7 @@ export interface MatchInput {
   target: TargetProduct;
   proposal: ShopperProposal;
   citations: SearchCitation[];
+  fetchedUrls: string[];
   observations: Observations;
 }
 
@@ -23,10 +24,15 @@ export interface MatchResult {
 
 export function matchProposal(input: MatchInput): MatchResult {
   const targetKey = resourceKey(input.target.canonical_url);
-  const allUrls = [...input.citations.map((citation) => citation.url), ...input.proposal.candidates.map((candidate) => candidate.url)];
-  const targetIdentityMatched = allUrls.some((url) => safeResourceKey(url) === targetKey);
-  const targetDiscovered = allUrls.some((url) => belongsToDomain(url, input.brandDomain));
-  const rankedCandidates = input.proposal.candidates.map((candidate, index): RankedCandidate => {
+  const citedKeys = new Set(input.citations.map((citation) => safeResourceKey(citation.url)).filter((key): key is string => key !== null));
+  const targetIdentityMatched = citedKeys.has(targetKey);
+  const targetDiscovered = input.citations.some((citation) => belongsToDomain(citation.url, input.brandDomain));
+  const rankedCandidates = input.proposal.candidates
+    .filter((candidate) => {
+      const key = safeResourceKey(candidate.url);
+      return key !== null && citedKeys.has(key);
+    })
+    .map((candidate, index): RankedCandidate => {
     const isTarget = safeResourceKey(candidate.url) === targetKey;
     return {
       rank: index + 1,
@@ -36,7 +42,7 @@ export function matchProposal(input: MatchInput): MatchResult {
       is_target_product: isTarget,
       reason_codes: candidate.reason_codes,
     };
-  });
+    });
   const targetCandidate = rankedCandidates.find((candidate) => candidate.is_target_product);
   const targetRecommended = targetCandidate !== undefined;
   const failureCodes = deriveFailureCodes(targetDiscovered, targetRecommended);
@@ -59,9 +65,7 @@ export function matchProposal(input: MatchInput): MatchResult {
       confidence: input.proposal.confidence,
       failure_codes: failureCodes,
       final_choice: finalChoice,
-      our_pages_fetched: unique(
-        input.citations.filter((citation) => belongsToDomain(citation.url, input.brandDomain)).map((citation) => citation.url),
-      ),
+      our_pages_fetched: unique(input.fetchedUrls.filter((url) => belongsToDomain(url, input.brandDomain))),
     },
   };
 }

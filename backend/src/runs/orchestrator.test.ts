@@ -35,6 +35,31 @@ test("runSimulation records shopper timeouts without dropping the population", a
   assert.deepEqual(result.agent_runs[0]?.outcome.failure_codes, [{ code: "AGENT_TIMEOUT" }]);
 });
 
+test("runSimulation emits only events from the successful retry attempt", async () => {
+  const emitted: AgentEvent[] = [];
+  const deps = dependencies([], flakyAgent());
+  deps.eventSink = { async emit(event) { emitted.push(event); } };
+
+  await runSimulation(input(), deps);
+
+  assert.equal(emitted.some((event) => event.type === "agent.query" && event.query === "discarded attempt"), false);
+  assert.equal(emitted.filter((event) => event.query_id === "q_001" && event.type === "agent.verdict").length, 1);
+});
+
+test("runSimulation enforces the total budget during catalogue snapshotting", async () => {
+  const deps = dependencies([], successfulAgent());
+  deps.config.runBudgetMs = 5;
+  const baseFetcher = deps.fetcher;
+  deps.fetcher = {
+    async get(url, signal) {
+      if (url.endsWith("/robots.txt")) await new Promise((resolve) => setTimeout(resolve, 30));
+      return baseFetcher.get(url, signal);
+    },
+  };
+
+  await assert.rejects(runSimulation(input(), deps), /simulation timed out/);
+});
+
 function input() {
   return {
     run_id: "run_1",
@@ -114,6 +139,22 @@ function timeoutAgent(): ShopperAgent {
     model: "anthropic/claude-opus-4.8",
     async *run(_brief, context): AsyncIterable<AgentEvent> {
       await new Promise<void>((resolve) => context.signal.addEventListener("abort", () => resolve(), { once: true }));
+    },
+  };
+}
+
+function flakyAgent(): ShopperAgent {
+  let attempts = 0;
+  return {
+    kind: "shared-search",
+    model: "anthropic/claude-opus-4.8",
+    async *run(brief, context): AsyncIterable<AgentEvent> {
+      attempts += 1;
+      if (attempts === 1) {
+        yield { type: "agent.query", run_id: context.runId, query_id: brief.query_id, agent_id: `agent_${brief.query_id}`, agent_kind: "shared-search", query: "discarded attempt" };
+        throw new Error("transient");
+      }
+      yield* successfulAgent().run(brief, context);
     },
   };
 }

@@ -47,6 +47,7 @@ export interface SimulationDependencies {
 interface CompletedAgent {
   run: AgentRun;
   evidence: Evidence[];
+  events: AgentEvent[];
 }
 
 export async function runSimulation(
@@ -55,22 +56,32 @@ export async function runSimulation(
 ): Promise<CheckResult> {
   const now = dependencies.now ?? (() => new Date());
   const monotonicNow = dependencies.monotonicNow ?? (() => performance.now());
+  const deadline = monotonicNow() + dependencies.config.runBudgetMs;
+  const withinBudget = <T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+    maximumMs = Number.POSITIVE_INFINITY,
+  ): Promise<T> => {
+    const remaining = Math.max(0, deadline - monotonicNow());
+    if (remaining === 0) return Promise.reject(new TimeoutError("simulation"));
+    return withTimeout(operation, Math.min(remaining, maximumMs), "simulation");
+  };
   const validateUrls = dependencies.validateUrls ?? (async (store, target) => {
     await assertSameOriginTarget(store, target);
   });
-  await validateUrls(input.store_url, input.target_product_url);
+  await withinBudget(async () => validateUrls(input.store_url, input.target_product_url));
   if (dependencies.agent.kind !== input.agent_kind) {
     throw new Error("configured shopper agent kind does not match simulation input");
   }
 
   const snapshotAt = now().toISOString();
-  const snapshot = await snapshotStore({
-    storeUrl: input.store_url,
-    targetProductUrl: input.target_product_url,
-    fetchedAt: snapshotAt,
-    fetcher: dependencies.fetcher,
-  });
-  const personas = await retryOnce(() => withTimeout(
+  const snapshot = await withinBudget((signal) => snapshotStore({
+      storeUrl: input.store_url,
+      targetProductUrl: input.target_product_url,
+      fetchedAt: snapshotAt,
+      fetcher: dependencies.fetcher,
+      signal,
+    }));
+  const personas = await retryOnce(() => withinBudget(
     (signal) => generatePersonas({
       productName: snapshot.targetProduct.name,
       category: snapshot.targetProduct.category,
@@ -81,31 +92,33 @@ export async function runSimulation(
       signal,
     }, dependencies.personaClient),
     dependencies.config.agentAttemptTimeoutMs,
-    "persona generation",
   ));
 
-  const deadline = monotonicNow() + dependencies.config.runBudgetMs;
   const completed = await mapConcurrent(
     personas,
     dependencies.config.agentConcurrency,
     async (brief, index) => {
       const remaining = Math.max(0, deadline - monotonicNow());
       if (remaining === 0) return failedAgentRun(brief, index, dependencies.agent, now(), "AGENT_TIMEOUT");
+      let completedAgent: CompletedAgent;
       try {
-        return await retryOnce(() => withTimeout(
+        completedAgent = await retryOnce(() => {
+          const attemptRemaining = Math.max(0, deadline - monotonicNow());
+          if (attemptRemaining === 0) return Promise.reject(new TimeoutError(`shopper ${brief.query_id}`));
+          return withTimeout(
           (attemptSignal) => runAgentAttempt(
             input,
             brief,
             index,
             dependencies.agent,
             snapshot,
-            dependencies.eventSink,
             now,
             attemptSignal,
           ),
-          Math.min(dependencies.config.agentAttemptTimeoutMs, remaining),
+          Math.min(dependencies.config.agentAttemptTimeoutMs, attemptRemaining),
           `shopper ${brief.query_id}`,
-        ));
+          );
+        });
       } catch (error) {
         return failedAgentRun(
           brief,
@@ -115,6 +128,8 @@ export async function runSimulation(
           error instanceof TimeoutError ? "AGENT_TIMEOUT" : "AGENT_ERROR",
         );
       }
+      for (const event of completedAgent.events) await dependencies.eventSink.emit(event);
+      return completedAgent;
     },
   );
   const agentRuns = completed.map((entry) => entry.run);
@@ -162,7 +177,6 @@ async function runAgentAttempt(
   index: number,
   agent: ShopperAgent,
   snapshot: StoreSnapshot,
-  eventSink: EventSink,
   now: () => Date,
   signal: AbortSignal,
 ): Promise<CompletedAgent> {
@@ -175,27 +189,29 @@ async function runAgentAttempt(
     signal,
   })) {
     events.push(event);
-    await eventSink.emit(event);
   }
   const verdict = events.findLast((event): event is Extract<AgentEvent, { type: "agent.verdict" }> => event.type === "agent.verdict");
   if (!verdict) throw new Error("shopper produced no verdict");
   const citations = events
     .filter((event): event is Extract<AgentEvent, { type: "agent.citation" }> => event.type === "agent.citation")
     .map((event) => ({ title: event.title, url: event.url }));
-  const observations = deriveObservations(snapshot, verdict.proposal, citations.map((citation) => citation.url));
+  const fetchedUrls: string[] = [];
+  const observations = deriveObservations(snapshot, verdict.proposal, fetchedUrls);
   const matched = matchProposal({
     brandDomain: new URL(input.store_url).hostname,
     target: snapshot.targetProduct,
     proposal: verdict.proposal,
     citations,
+    fetchedUrls,
     observations,
   });
   const evidence = eventEvidence(events, brief.query_id, now);
   const durationMs = Math.max(0, now().getTime() - started.getTime());
   const webEvidenceIds = evidence.filter((item) => item.kind === "search_result" || item.kind === "api_call").map((item) => item.evidence_id);
-  const storeEvidenceIds = evidence.filter((item) => item.kind === "search_result" && item.url && belongsToDomain(item.url, input.store_url)).map((item) => item.evidence_id);
+  const storeEvidenceIds: string[] = [];
 
   return {
+    events,
     evidence,
     run: {
       run_id: `ar_${String(index + 1).padStart(3, "0")}`,
@@ -229,6 +245,7 @@ function failedAgentRun(
 ): CompletedAgent {
   const observations = emptyObservations();
   return {
+    events: [],
     evidence: [],
     run: {
       run_id: `ar_${String(index + 1).padStart(3, "0")}`,
@@ -262,8 +279,8 @@ function failedAgentRun(
   };
 }
 
-function deriveObservations(snapshot: StoreSnapshot, proposal: ShopperProposal, citationUrls: string[]): Observations {
-  const targetSeen = citationUrls.some((url) => sameResource(url, snapshot.targetProduct.canonical_url));
+function deriveObservations(snapshot: StoreSnapshot, proposal: ShopperProposal, fetchedUrls: string[]): Observations {
+  const targetSeen = fetchedUrls.some((url) => sameResource(url, snapshot.targetProduct.canonical_url));
   const targetCandidate = proposal.candidates.find((candidate) => sameResource(candidate.url, snapshot.targetProduct.canonical_url));
   return {
     price_found: targetSeen && snapshot.targetProduct.price !== null,
@@ -271,7 +288,7 @@ function deriveObservations(snapshot: StoreSnapshot, proposal: ShopperProposal, 
     shipping_information_found: false,
     return_policy_found: false,
     structured_product_data_found: targetSeen && !snapshot.siteAudit.structured_data.missing_json_ld_product_ids.includes(snapshot.targetProduct.product_id),
-    reviews_found: targetCandidate?.reason_codes.some((entry) => entry.code === "STRONG_REVIEW_EVIDENCE" || entry.code === "WEAK_REVIEW_EVIDENCE") ?? false,
+    reviews_found: targetSeen && (targetCandidate?.reason_codes.some((entry) => entry.code === "STRONG_REVIEW_EVIDENCE" || entry.code === "WEAK_REVIEW_EVIDENCE") ?? false),
     acp_supported: snapshot.siteAudit.agent_commerce.found,
     ucp_supported: snapshot.siteAudit.ucp.found,
   };

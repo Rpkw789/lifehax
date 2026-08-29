@@ -23,7 +23,11 @@ test("matchProposal derives target rank from canonical candidate URLs", () => {
       purchase_intent: "high",
       confidence: 0.9,
     },
-    citations: [{ title: "Alpha", url: "https://shop.example/items/alpha" }],
+    citations: [
+      { title: "Other", url: "https://other.example/items/one" },
+      { title: "Alpha", url: "https://shop.example/items/alpha" },
+    ],
+    fetchedUrls: [],
     observations: baseObservations(),
   });
 
@@ -40,11 +44,43 @@ test("matchProposal never trusts a foreign candidate identity", () => {
     target: { product_id: "A-1", name: "Alpha", canonical_url: "https://shop.example/items/alpha", gtin: null, sku: "A-1", category: null, price: null },
     proposal: { candidates: [{ name: "Alpha", url: "https://other.example/items/alpha", reason_codes: [] }], purchase_intent: "low", confidence: 0.5 },
     citations: [],
+    fetchedUrls: [],
     observations: baseObservations(),
   });
 
   assert.equal(result.outcome.target_recommended, false);
   assert.deepEqual(result.outcome.failure_codes, [{ code: "NOT_IN_SEARCH_RESULTS" }]);
+});
+
+test("matchProposal rejects model candidates that have no retrieved citation", () => {
+  const result = matchProposal({
+    brandDomain: "shop.example",
+    target: { product_id: "A-1", name: "Alpha", canonical_url: "https://shop.example/items/alpha", gtin: null, sku: "A-1", category: null, price: null },
+    proposal: { candidates: [{ name: "Alpha", url: "https://shop.example/items/alpha", reason_codes: [] }], purchase_intent: "high", confidence: 0.9 },
+    citations: [],
+    fetchedUrls: [],
+    observations: baseObservations(),
+  });
+
+  assert.equal(result.outcome.target_discovered, false);
+  assert.equal(result.outcome.target_identity_matched, false);
+  assert.equal(result.outcome.target_recommended, false);
+  assert.equal(result.outcome.target_rank, null);
+  assert.deepEqual(result.rankedCandidates, []);
+  assert.deepEqual(result.outcome.failure_codes, [{ code: "NOT_IN_SEARCH_RESULTS" }]);
+});
+
+test("matchProposal records only explicitly fetched brand pages", () => {
+  const result = matchProposal({
+    brandDomain: "shop.example",
+    target: { product_id: "A-1", name: "Alpha", canonical_url: "https://shop.example/items/alpha", gtin: null, sku: "A-1", category: null, price: null },
+    proposal: { candidates: [{ name: "Alpha", url: "https://shop.example/items/alpha", reason_codes: [] }], purchase_intent: "medium", confidence: 0.7 },
+    citations: [{ title: "Alpha", url: "https://shop.example/items/alpha" }],
+    fetchedUrls: [],
+    observations: baseObservations(),
+  });
+
+  assert.deepEqual(result.outcome.our_pages_fetched, []);
 });
 
 function baseObservations() {
