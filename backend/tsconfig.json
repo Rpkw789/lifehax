@@ -1,8 +1,19 @@
 {
   "compilerOptions": {
     "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "types": ["bun"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+    "jsxImportSource": "hono/jsx",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@contracts/*": ["../shared/contracts/*"],
+      "@fixtures/*": ["../shared/fixtures/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "../shared/**/*.ts"]
 }
