@@ -39,7 +39,9 @@ export function LivestreamTile({
   const [sourceIndex, setSourceIndex] = useState(0);
   const source = sources[sourceIndex];
 
-  const showLiveView = Boolean(liveViewUrl) && !agent.settled;
+  // Sessions are now held open for the whole run, so the live view stays valid
+  // after an individual agent settles — no need to drop it early.
+  const showLiveView = Boolean(liveViewUrl);
 
   const color = agent.persona.color;
   const stageIndex = Math.max(0, Math.min(5, agent.progress));

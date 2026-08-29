@@ -51,6 +51,10 @@ export async function runPopulation(
     scripted: 10 - realIndices.length,
   });
 
+  // Browsers stay open until every agent has settled, so each tile's live view
+  // remains valid for the whole run instead of dying when its agent finishes.
+  const open: OpenBrowser[] = [];
+
   const blockers = blockersFrom(checks);
   agentLog.info("blockers observed in the audit", {
     count: blockers.length,
@@ -61,12 +65,23 @@ export async function runPopulation(
     .map((i) => runScriptedAgent(run, i, checks, blockers));
 
   const real = realIndices.map((i) =>
-    runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!),
+    runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!, open),
   );
 
   const startedAt = Date.now();
   await Promise.allSettled([...scripted, ...real]);
-  agentLog.info("population settled", { ms: since(startedAt) });
+
+  await Promise.allSettled(
+    open.map(async ({ stagehand, browser }) => {
+      await stagehand.close().catch(() => {});
+      await browser.close().catch(() => {});
+    }),
+  );
+
+  agentLog.info("population settled", {
+    ms: since(startedAt),
+    browsersClosed: open.length,
+  });
 }
 
 /** Spread the real agents across different briefs so the tiles differ. */
@@ -83,11 +98,31 @@ function pickRealAgents(personaCount: number): number[] {
 // Real agents
 // ---------------------------------------------------------------------------
 
+/** Optional pacing, so a live view is watchable on stage. 0 in normal use. */
+const STAGE_DELAY_MS = Number(process.env.HAPPY2_STAGE_DELAY_MS ?? 0);
+
+/** Browsers are closed after the whole population settles, not per agent, so
+ *  their live views stay valid for the length of the run. */
+export interface OpenBrowser {
+  stagehand: Stagehand;
+  browser: Awaited<ReturnType<typeof browserbase.launch>>;
+}
+
+/**
+ * One shopper, working the store the way a person would: land on the homepage,
+ * find the catalogue, pick something that fits the brief, open it, choose a
+ * variant, add it, and head for checkout.
+ *
+ * Every stage verdict is a checked post-condition — a changed URL, a product
+ * link count, a cart line. `act()` resolves happily when it finds nothing to
+ * click, so trusting it not to throw would mark empty stages as passes.
+ */
 async function runRealAgent(
   run: Run,
   agentIndex: number,
   catalogue: Catalogue,
   persona: Persona,
+  open: OpenBrowser[],
 ): Promise<void> {
   const agentId = AGENT_IDS[agentIndex]!;
   const apiKey = process.env.BROWSERBASE_API_KEY;
@@ -98,52 +133,90 @@ async function runRealAgent(
     return;
   }
 
-  const target = catalogue.products[agentIndex % Math.max(1, catalogue.products.length)];
-  if (!target) {
-    emitAgentEvent(run, agentId, 1, "fail", "no product pages were discoverable");
-    return;
-  }
-
-  // Stage 1 is discovery, which the catalogue snapshot already proved.
-  emitAgentEvent(run, agentId, 1, "pass");
-
-  let browser: Awaited<ReturnType<typeof browserbase.launch>> | null = null;
-  let stagehand: Stagehand | null = null;
-
   try {
     const launchedAt = Date.now();
-    browser = await browserbase.launch({ apiKey });
-    stagehand = await Stagehand.create({ browser });
+    const browser = await browserbase.launch({ apiKey });
+    const stagehand = await Stagehand.create({ browser });
+    open.push({ stagehand, browser });
 
     if (browser.sessionId) {
       const liveViewUrl = await liveView(browser.sessionId, apiKey);
       run.sessions[agentId] = { sessionId: browser.sessionId, liveViewUrl };
-      if (liveViewUrl) {
-        publish(run, { type: "session", agentId, liveViewUrl });
-      }
+      if (liveViewUrl) publish(run, { type: "session", agentId, liveViewUrl });
     }
+
     agentLog.info(`${agentId} browser ready`, {
       ms: since(launchedAt),
-      target: target.url,
-      // The live session, for watching a run or debugging one after the fact.
+      brief: persona.prompt.slice(0, 60),
       session: browser.sessionId
         ? `https://browserbase.com/sessions/${browser.sessionId}`
         : "none",
-      liveView: browser.sessionId
-        ? (run.sessions[agentId]?.liveViewUrl ? "available" : "unavailable")
-        : "none",
+      liveView: run.sessions[agentId]?.liveViewUrl ? "available" : "unavailable",
     });
 
     const [page] = await browser.context.pages();
     if (!page) throw new Error("browserbase returned no page");
-
     const sh = stagehand;
 
-    // 2 · land
-    if (!(await stage(run, agentId, 2, () => page.goto(target.url)))) return;
+    await page.goto(catalogue.origin);
+    await dismissOverlays(sh);
 
-    // 3 · read — can an agent actually get the facts off this page?
+    // 1 · discover — find the catalogue from the front page.
+    if (
+      !(await stage(run, agentId, 1, async () => {
+        const from = await page.url();
+        await sh.act(
+          "Open the main shop, catalogue, or all-products section of this store.",
+        );
+        const url = await waitForNavigation(page, from);
+        await dismissOverlays(sh);
+
+        const links = await productLinkCount(page);
+        // Leaving the homepage is not enough on its own — a store whose only
+        // "catalogue" is the front page still has to list something.
+        if (links < 3) {
+          throw new Error(
+            `no catalogue reachable — ${short(url)} lists ${links} product links`,
+          );
+        }
+      }))
+    ) {
+      return;
+    }
+
+    // 2 · land — the listing has to be readable, not just present.
+    if (
+      !(await stage(run, agentId, 2, async () => {
+        const seen = await sh.observe(
+          "List the products offered on this page, with their names.",
+        );
+        const links = await productLinkCount(page);
+        if (links === 0) throw new Error("listing page exposes no product links");
+        agentLog.debug(`${agentId} sees ${links} products`, String(seen).slice(0, 80));
+      }))
+    ) {
+      return;
+    }
+
+    // 3 · read — open the best match for the brief and get the facts off it.
     const facts = await stageValue(run, agentId, 3, async () => {
+      const from = await page.url();
+      await sh.act(
+        `Click the product link for the item that best matches this shopper: ${persona.prompt}`,
+      );
+      let url = await waitForNavigation(page, from);
+
+      // Some listings need a second click to get off a collection page.
+      if (!/\/products?\//i.test(url)) {
+        await sh.act("Open one of the product listings on this page.");
+        url = await waitForNavigation(page, url);
+      }
+      await dismissOverlays(sh);
+
+      if (!/\/products?\//i.test(url)) {
+        throw new Error(`clicking through did not reach a product page (${short(url)})`);
+      }
+
       const result = await sh.extract(
         "Extract the product title, its price, whether it is in stock, and any listed specifications.",
         z.object({
@@ -156,65 +229,152 @@ async function runRealAgent(
       const data = result.data;
       if (!data?.title || !data?.price) {
         throw new Error(
-          `page did not yield ${!data?.title ? "a title" : "a price"} an agent could read`,
+          `product page did not yield ${!data?.title ? "a title" : "a price"} an agent could read`,
         );
       }
       return data;
     });
     if (!facts) return;
 
-    // 4 · select
+    // 4 · select — a variant choice that actually did something.
     if (
       !(await stage(run, agentId, 4, () =>
-        sh.act(`Choose the option that best matches this shopper: ${persona.prompt}`),
+        acted(
+          sh,
+          `Choose the size, colour or variant that matches this shopper: ${persona.prompt}`,
+        ),
       ))
     ) {
       return;
     }
 
-    // 5 · cart
-    if (!(await stage(run, agentId, 5, () => sh.act("Add this product to the cart")))) {
+    // 5 · cart — confirmed by the cart itself, not by the model's say-so.
+    if (
+      !(await stage(run, agentId, 5, async () => {
+        await acted(sh, "Add this product to the cart.");
+        const count = await cartCount(page);
+        if (count === 0) {
+          throw new Error("add-to-cart ran but the cart is still empty");
+        }
+      }))
+    ) {
       return;
     }
 
-    // 6 · checkout — reaching it is the pass. We never enter payment details.
-    await stage(run, agentId, 6, () =>
-      sh.act("Go to the checkout page. Do not enter any payment information."),
-    );
+    // 6 · checkout — reaching it is the pass. No payment details, ever.
+    await stage(run, agentId, 6, async () => {
+      const from = await page.url();
+      await acted(
+        sh,
+        "Go to the checkout page. Do not enter any payment information.",
+      );
+      const url = await waitForNavigation(page, from);
+      if (!/checkout|payment/i.test(url)) {
+        throw new Error(`checkout was not reachable (stopped at ${short(url)})`);
+      }
+    });
   } catch (err) {
     agentLog.error(`${agentId} aborted`, err);
-    emitAgentEvent(run, agentId, 2, "fail", message(err));
-  } finally {
-    await stagehand?.close().catch(() => {});
-    await browser?.close().catch(() => {});
+    emitAgentEvent(run, agentId, 1, "fail", message(err));
   }
 }
 
 /**
- * The embeddable live view for a running session.
+ * Runs `act` and insists it actually did something.
  *
- * This is not the dashboard link — it is the iframe-able debugger URL, and it
- * is only valid while the session is alive (Browserbase 410s a stopped one).
+ * Stagehand resolves successfully when the model finds no element to act on —
+ * it logs "No actionable element returned by the LLM" and returns an empty
+ * action list. Treating that as a pass is how agents "select" nothing.
  */
-async function liveView(sessionId: string, apiKey: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://api.browserbase.com/v1/sessions/${sessionId}/debug`,
-      { headers: { "X-BB-API-Key": apiKey } },
-    );
-    if (!res.ok) {
-      agentLog.warn("no live view for session", { sessionId, status: res.status });
-      return null;
-    }
-    const body = (await res.json()) as {
-      debuggerFullscreenUrl?: string;
-      debuggerUrl?: string;
-    };
-    return body.debuggerFullscreenUrl ?? body.debuggerUrl ?? null;
-  } catch (err) {
-    agentLog.warn("live view lookup failed", err);
-    return null;
+async function acted(sh: Stagehand, instruction: string): Promise<void> {
+  const result = await sh.act(instruction);
+  const data = result.data;
+  if (!data?.success || data.actions.length === 0) {
+    throw new Error(data?.message?.trim() || "no actionable element on the page");
   }
+}
+
+/** Consent and newsletter overlays block everything behind them. */
+async function dismissOverlays(sh: Stagehand): Promise<void> {
+  try {
+    await sh.act(
+      "If a cookie consent, newsletter, or region popup is covering the page, dismiss or accept it. If there is none, do nothing.",
+    );
+  } catch {
+    // Nothing to dismiss is the common case and not a failure.
+  }
+}
+
+/** How many distinct product links the current page exposes. */
+async function productLinkCount(page: { evaluate: <R>(fn: () => R) => Promise<R> }): Promise<number> {
+  try {
+    return await page.evaluate(() => {
+      const hrefs = Array.from(
+        document.querySelectorAll("a[href]"),
+        (a) => (a as HTMLAnchorElement).href,
+      );
+      return new Set(hrefs.filter((h) => /\/products?\//i.test(h))).size;
+    });
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Lines in the cart. Uses Shopify's /cart.js where available and falls back to
+ * reading a cart-count element, so a non-Shopify store still gets a verdict.
+ */
+async function cartCount(page: { evaluate: <R>(fn: () => R | Promise<R>) => Promise<R> }): Promise<number> {
+  try {
+    return await page.evaluate(async () => {
+      try {
+        const res = await fetch("/cart.js", { headers: { accept: "application/json" } });
+        if (res.ok) {
+          const cart = (await res.json()) as { item_count?: number };
+          if (typeof cart.item_count === "number") return cart.item_count;
+        }
+      } catch {
+        // fall through to the DOM
+      }
+      const el = document.querySelector(
+        "[data-cart-count], .cart-count, [class*='cart-count'], [id*='cart-count']",
+      );
+      const n = Number((el?.textContent ?? "").replace(/\D/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    });
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Waits for the page to actually navigate.
+ *
+ * `act()` resolves as soon as it has issued the click, so reading `page.url()`
+ * straight afterwards sees the old page and every product click looks like it
+ * failed. Polls instead, and reports the URL it settled on.
+ */
+async function waitForNavigation(
+  page: { url: () => Promise<string> },
+  from: string,
+  timeoutMs = 12_000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let url = from;
+  while (Date.now() < deadline) {
+    url = await page.url();
+    if (url !== from) {
+      // Let the destination settle before anything reads the DOM.
+      await sleep(1200);
+      return page.url();
+    }
+    await sleep(400);
+  }
+  return url;
+}
+
+function short(url: string): string {
+  return url.replace(/^https?:\/\//, "").slice(0, 60);
 }
 
 /** Runs one stage, emits pass/fail, and reports whether to keep going. */
@@ -233,6 +393,7 @@ async function stageValue<T>(
   n: StageNumber,
   work: () => Promise<T>,
 ): Promise<T | null> {
+  if (STAGE_DELAY_MS > 0) await sleep(STAGE_DELAY_MS);
   const startedAt = Date.now();
   try {
     const value = await withTimeout(work(), STAGE_TIMEOUT_MS);
@@ -259,6 +420,33 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 function message(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   return raw.replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
+/**
+ * The embeddable live view for a running session.
+ *
+ * Not the dashboard link — the iframe-able debugger URL, valid only while the
+ * session is alive (Browserbase 410s a stopped one).
+ */
+async function liveView(sessionId: string, apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.browserbase.com/v1/sessions/${sessionId}/debug`,
+      { headers: { "X-BB-API-Key": apiKey } },
+    );
+    if (!res.ok) {
+      agentLog.warn("no live view for session", { sessionId, status: res.status });
+      return null;
+    }
+    const body = (await res.json()) as {
+      debuggerFullscreenUrl?: string;
+      debuggerUrl?: string;
+    };
+    return body.debuggerFullscreenUrl ?? body.debuggerUrl ?? null;
+  } catch (err) {
+    agentLog.warn("live view lookup failed", err);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

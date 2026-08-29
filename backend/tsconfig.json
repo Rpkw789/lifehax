@@ -4,7 +4,9 @@
     "module": "Preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "lib": ["ESNext"],
+    // DOM is here for the page.evaluate() callbacks in agents.ts, which are
+    // serialised and run inside the agent's browser, not on the server.
+    "lib": ["ESNext", "DOM"],
     "types": ["bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
