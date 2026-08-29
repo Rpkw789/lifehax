@@ -1,0 +1,268 @@
+import type { CheckResult, TargetProduct } from "@contracts/check-result";
+import {
+  validateSurfaceSimulationEvent,
+  type SurfaceSimulationEvent,
+} from "@contracts/surface-simulation";
+import type { ShopperAgent } from "../agents/types.ts";
+import type { DocumentFetcher } from "../catalogue/snapshot.ts";
+import type { PersonaBrief } from "../personas/generate.ts";
+import type { Catalogue, Checks, Persona } from "../types.ts";
+import type { SurfaceCritiqueClient } from "./critique.ts";
+import { runGuideSimulation } from "./guide-worker.ts";
+import { runProtocolSimulation } from "./protocol-worker.ts";
+import { buildSurfaceCheckResult } from "./result.ts";
+import {
+  runWebSearchSimulation,
+  type SearchWorkerResult,
+} from "./search.ts";
+import type {
+  SurfaceEventEmitter,
+  SurfaceWorkerContext,
+  SurfaceWorkerResult,
+} from "./types.ts";
+
+export interface SurfaceSimulationInput {
+  runId: string;
+  reportId: string;
+  generatedAt: string;
+  storeUrl: string;
+  testSkus: string;
+  disabledPersonas: number[];
+  catalogue: Catalogue;
+  checks: Checks;
+  personas: Persona[];
+  briefs: string[];
+  locale: string;
+  currency: string;
+  fetcher: DocumentFetcher;
+  acpPath?: string;
+  signal?: AbortSignal;
+}
+
+type StandardWorker = (
+  context: SurfaceWorkerContext,
+  emit: SurfaceEventEmitter,
+) => Promise<SurfaceWorkerResult>;
+type SearchWorker = (
+  context: SurfaceWorkerContext,
+  emit: SurfaceEventEmitter,
+) => Promise<SearchWorkerResult>;
+
+export interface SurfaceSimulationDependencies {
+  emitForWorker: SurfaceEventEmitter;
+  agent?: ShopperAgent;
+  critiqueClient?: SurfaceCritiqueClient;
+  protocolWorker?: StandardWorker;
+  guideWorker?: StandardWorker;
+  searchWorker?: SearchWorker;
+}
+
+export async function runSurfaceSimulations(
+  input: SurfaceSimulationInput,
+  dependencies: SurfaceSimulationDependencies,
+): Promise<CheckResult> {
+  const target = selectTarget(input.catalogue, input.testSkus, input.currency);
+  const brief = selectBrief(input.briefs, input.personas, input.disabledPersonas);
+  const context: SurfaceWorkerContext = {
+    runId: input.runId,
+    storeUrl: input.storeUrl,
+    target,
+    brief: brief.query,
+    at: input.generatedAt,
+    fetcher: input.fetcher,
+    signal: input.signal,
+  };
+  const protocolWorker = dependencies.protocolWorker ?? ((workerContext, emit) =>
+    runProtocolSimulation(workerContext, emit, {
+      acpPath: input.acpPath,
+      critiqueClient: dependencies.critiqueClient,
+    }));
+  const guideWorker = dependencies.guideWorker ?? ((workerContext, emit) =>
+    runGuideSimulation(workerContext, emit, {
+      critiqueClient: dependencies.critiqueClient,
+    }));
+  const searchWorker = dependencies.searchWorker ?? ((workerContext, emit) =>
+    runWebSearchSimulation({
+      context: workerContext,
+      brief,
+      agent: dependencies.agent ?? unavailableSearchAgent,
+      emit,
+      critiqueClient: dependencies.critiqueClient,
+    }));
+
+  const [protocol, guide, search] = await Promise.all([
+    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker),
+    settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker),
+    settleSearch(context, brief, dependencies, searchWorker),
+  ]);
+
+  return buildSurfaceCheckResult({
+    runId: input.runId,
+    reportId: input.reportId,
+    generatedAt: input.generatedAt,
+    locale: input.locale,
+    currency: input.currency,
+    catalogue: input.catalogue,
+    checks: input.checks,
+    target,
+    brief,
+    protocol,
+    guide,
+    search,
+  });
+}
+
+export function createSurfaceEventEmitter(
+  onEvent: (event: SurfaceSimulationEvent) => void,
+  now: () => Date = () => new Date(),
+): SurfaceEventEmitter {
+  let sequence = 0;
+  return (surface, phase, message, evidenceId) => {
+    const current = sequence;
+    sequence += 1;
+    const event: SurfaceSimulationEvent = {
+      event_id: `surf_${String(current + 1).padStart(4, "0")}`,
+      sequence: current,
+      surface,
+      phase,
+      at: now().toISOString(),
+      message,
+      evidence_id: evidenceId,
+    };
+    const errors = validateSurfaceSimulationEvent(event);
+    if (errors.length > 0) {
+      throw new Error(`invalid surface event: ${errors.join("; ")}`);
+    }
+    onEvent(event);
+    return event;
+  };
+}
+
+export function selectTarget(
+  catalogue: Catalogue,
+  testSkus: string,
+  currency: string,
+): TargetProduct {
+  const wanted = testSkus.split(",").map((value) => value.trim()).filter(Boolean);
+  const selected = catalogue.products.find((product) =>
+    wanted.some((value) => `${product.url} ${product.title ?? ""}`.toLowerCase().includes(value.toLowerCase())),
+  ) ?? catalogue.products[0];
+  if (!selected) throw new Error("surface simulations require a readable product");
+  const selectedSku = wanted.find((value) =>
+    `${selected.url} ${selected.title ?? ""}`.toLowerCase().includes(value.toLowerCase()),
+  ) ?? null;
+  const amount = selected.price === null ? Number.NaN : Number(selected.price.replace(/[^0-9.-]/g, ""));
+  const url = new URL(selected.url);
+  const fallbackName = decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) ?? url.hostname);
+  return {
+    product_id: stableProductId(url),
+    name: selected.title?.trim() || fallbackName,
+    canonical_url: url.href,
+    gtin: null,
+    sku: selectedSku,
+    category: null,
+    price: Number.isFinite(amount) ? { amount, currency } : null,
+  };
+}
+
+function selectBrief(
+  briefs: string[],
+  personas: Persona[],
+  disabledPersonas: number[],
+): PersonaBrief {
+  const enabledIndex = briefs.findIndex(
+    (_brief, index) => !disabledPersonas.includes(Math.floor(index / 2)),
+  );
+  const index = enabledIndex >= 0 ? enabledIndex : 0;
+  const query = briefs[index]?.trim();
+  if (!query) throw new Error("surface simulations require a shopper brief");
+  const persona = personas[Math.floor(index / 2)];
+  return {
+    brief_id: "brief_surface_001",
+    query_id: "q_surface_001",
+    name: persona?.name ?? "Shopping agent",
+    persona: persona?.prompt ?? "Evaluates retrieved evidence before choosing.",
+    query,
+    intent: "product_discovery",
+  };
+}
+
+async function settleStandard(
+  surface: "agent_protocol" | "model_readable_guide",
+  context: SurfaceWorkerContext,
+  emit: SurfaceEventEmitter,
+  worker: StandardWorker,
+): Promise<SurfaceWorkerResult> {
+  try {
+    return await worker(context, emit);
+  } catch {
+    emit(surface, "result", "Simulation settled: Unable to verify", null);
+    const origin = new URL(context.storeUrl).origin;
+    return {
+      surface,
+      evidence: [],
+      probes:
+        surface === "model_readable_guide"
+          ? {
+              llms_txt: {
+                url: new URL("/llms.txt", origin).href,
+                found: false,
+                status: null,
+                note: "Unable to verify",
+              },
+            }
+          : {
+              agent_commerce: {
+                url: new URL("/.well-known/agent-commerce", origin).href,
+                found: false,
+                status: null,
+                note: "Unable to verify",
+              },
+              ucp: {
+                url: new URL("/.well-known/ucp", origin).href,
+                found: false,
+                status: null,
+                note: "Unable to verify",
+              },
+            },
+      critique: null,
+    };
+  }
+}
+
+async function settleSearch(
+  context: SurfaceWorkerContext,
+  brief: PersonaBrief,
+  dependencies: SurfaceSimulationDependencies,
+  worker: SearchWorker,
+): Promise<SearchWorkerResult> {
+  try {
+    return await worker(context, dependencies.emitForWorker);
+  } catch {
+    return runWebSearchSimulation({
+      context,
+      brief,
+      agent: unavailableSearchAgent,
+      emit: dependencies.emitForWorker,
+    });
+  }
+}
+
+const unavailableSearchAgent: ShopperAgent = {
+  kind: "shared-search",
+  model: "unavailable",
+  async *run() {
+    throw new Error("shared search is not configured");
+  },
+};
+
+function stableProductId(url: URL): string {
+  const readable = url.pathname
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
+  if (readable) return `item_${readable}`;
+  let hash = 0;
+  for (const character of url.href) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return `item_${hash.toString(36)}`;
+}
