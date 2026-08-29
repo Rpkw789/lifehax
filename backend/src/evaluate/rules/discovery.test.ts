@@ -40,4 +40,15 @@ describe("discovery.sources", () => {
     }
     expect(discoverySourcesRule.evaluate(clean)).toBeNull();
   });
+
+  test("claims only the discovery codes actually observed, not both by default", () => {
+    const partial = loadExampleCheckResult();
+    for (const run of partial.agent_runs) {
+      run.outcome.failure_codes = run.outcome.failure_codes.filter(
+        (e) => e.code !== "NOT_IN_SEARCH_RESULTS",
+      );
+    }
+    const finding = discoverySourcesRule.evaluate(partial)!;
+    expect(finding.addresses_failure_codes).toEqual(["NOT_IN_SITEMAP"]);
+  });
 });
