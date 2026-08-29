@@ -102,7 +102,9 @@
 /* Viewport */
 .viewport {
   position: relative;
-  height: 158px;
+  /* Tall enough that a live browser view is actually legible; the ring regions
+     are percentages, so they scale with it. */
+  height: 230px;
   background: var(--page);
   overflow: hidden;
 }

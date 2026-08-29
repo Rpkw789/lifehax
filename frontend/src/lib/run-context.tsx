@@ -21,7 +21,7 @@ import {
 } from "react";
 
 import { createRun, subscribeToRun, type StreamMessage } from "./api";
-import { ARCHETYPE_PERSONAS } from "./fixtures";
+import { ARCHETYPE_PERSONAS, TILE_COUNT } from "./fixtures";
 import { agentStates } from "./simulation";
 import type {
   AgentEvent,
@@ -215,7 +215,7 @@ export function RunProvider({
   const tileIds = useMemo(() => {
     const live = AGENT_IDS.filter((id) => sessions[id]);
     const rest = AGENT_IDS.filter((id) => !sessions[id]);
-    return [...live, ...rest].slice(0, 4);
+    return [...live, ...rest].slice(0, TILE_COUNT);
   }, [sessions]);
 
   // Host only. The tile URL bar appends a per-stage path, so keeping the user's

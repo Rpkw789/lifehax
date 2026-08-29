@@ -9,3 +9,9 @@ _handoff
 # secrets
 .env*
 !.env.example
+
+# Raw screen recordings kept at the repo root as source material. The clips the
+# app serves live in frontend/public/tiles/ and are re-encoded first — the
+# originals are ~20MB each and git keeps them forever.
+/*.mp4
+/*.mov
