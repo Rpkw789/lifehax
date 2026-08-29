@@ -19,10 +19,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { CheckResult } from "@contracts/check-result";
+import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 
 import { createRun, subscribeToRun, type StreamMessage } from "./api";
 import { ARCHETYPE_PERSONAS, TILE_COUNT } from "./fixtures";
 import { agentStates } from "./simulation";
+import { appendSurfaceEvent } from "./surface-events";
 import type {
   AgentEvent,
   AgentState,
@@ -69,6 +72,10 @@ interface RunContextValue {
   briefs: string[];
   /** The site audit. Drives the protocol and guide columns on Check. */
   checks: Checks | null;
+  /** Real append-only progress for ACP/UCP, llms.txt, and Web search. */
+  surfaceEvents: SurfaceSimulationEvent[];
+  /** One contract-valid report consolidating the three simulations. */
+  checkResult: CheckResult | null;
   catalogueCount: number;
   /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
   sessions: Record<string, string>;
@@ -102,6 +109,10 @@ export function RunProvider({
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [briefs, setBriefs] = useState<string[]>([]);
   const [checks, setChecks] = useState<Checks | null>(null);
+  const [surfaceEvents, setSurfaceEvents] = useState<
+    SurfaceSimulationEvent[]
+  >([]);
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [surfaces, setSurfaces] = useState<Surface[]>([]);
   const [catalogueCount, setCatalogueCount] = useState(0);
@@ -142,6 +153,14 @@ export function RunProvider({
       case "agent":
         setEvents((current) => [...current, message.event]);
         break;
+      case "surface_simulation":
+        setSurfaceEvents((current) =>
+          appendSurfaceEvent(current, message.event),
+        );
+        break;
+      case "check_result":
+        setCheckResult(message.result);
+        break;
       case "findings":
         setFindings(message.findings);
         setSurfaces(message.surfaces);
@@ -164,6 +183,8 @@ export function RunProvider({
     setSessions({});
     setBriefs([]);
     setChecks(null);
+    setSurfaceEvents([]);
+    setCheckResult(null);
     setFindings([]);
     setSurfaces([]);
     setError(null);
@@ -264,6 +285,8 @@ export function RunProvider({
       surfaces,
       briefs,
       checks,
+      surfaceEvents,
+      checkResult,
       catalogueCount,
       sessions,
       tileIds,
@@ -288,6 +311,8 @@ export function RunProvider({
       surfaces,
       briefs,
       checks,
+      surfaceEvents,
+      checkResult,
       catalogueCount,
       sessions,
       tileIds,

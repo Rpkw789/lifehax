@@ -9,13 +9,15 @@ import { SectionLabel } from "@/components/SectionLabel";
 import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
 import { elapsedLabel, logText } from "@/lib/simulation";
+import { surfaceConsoleState } from "@/lib/surface-events";
 import motion from "@/styles/motion.module.css";
 import styles from "./check.module.css";
 import { LivestreamTile } from "./LivestreamTile";
 import { SurfaceColumn } from "./SurfaceColumn";
+import { SurfaceConsole } from "./SurfaceConsole";
 import tileStyles from "./SurfaceColumn.module.css";
 import { UnifiedProgress } from "./UnifiedProgress";
-import { buildSurfaces } from "./surfaces";
+import { buildSurfaces, simulationKeyFor } from "./surfaces";
 
 /** One colour per surface. Browse keeps the ink so tiles stay neutral. */
 const SURFACE_COLORS: Record<string, string> = {
@@ -37,11 +39,11 @@ export default function CheckScreen() {
     startRun,
     agents,
     events,
-    personas,
     sessions,
     tileIds,
     briefs,
-    checks,
+    surfaceEvents,
+    checkResult,
   } = useRun();
   const started = useRef(false);
 
@@ -59,10 +61,8 @@ export default function CheckScreen() {
 
   const surfaces = buildSurfaces({
     agents,
-    checks,
-    briefs,
-    host: storeHost,
-    tick,
+    surfaceEvents,
+    checkResult,
     complete,
   });
 
@@ -141,38 +141,59 @@ export default function CheckScreen() {
       />
 
       <div className={styles.columns}>
-        {surfaces.map((surface) =>
-          surface.key === "browse" ? (
-            <SurfaceColumn
-              key={surface.key}
-              surface={surface}
-              tick={tick}
-              color={SURFACE_COLORS.browse!}
-            >
-              <div className={tileStyles.tiles}>
-                {tiles.map((agent) => (
-                  <LivestreamTile
-                    key={agent.id}
-                    agent={agent}
-                    storeHost={storeHost}
-                    liveViewUrl={sessions[agent.id]}
-                    booting={running && agent.progress === 0 && !agent.blocked}
-                    brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
-                    events={events.filter((e) => e.agentId === agent.id)}
-                  />
-                ))}
-              </div>
-            </SurfaceColumn>
-          ) : (
+        {surfaces.map((surface) => {
+          if (surface.key === "browse") {
+            return (
+              <SurfaceColumn
+                key={surface.key}
+                surface={surface}
+                tick={tick}
+                color={SURFACE_COLORS.browse!}
+              >
+                <div className={tileStyles.tiles}>
+                  {tiles.map((agent) => (
+                    <LivestreamTile
+                      key={agent.id}
+                      agent={agent}
+                      storeHost={storeHost}
+                      liveViewUrl={sessions[agent.id]}
+                      booting={running && agent.progress === 0 && !agent.blocked}
+                      brief={briefs[Number(agent.id.replace(/\D/g, "")) - 1]}
+                      events={events.filter((e) => e.agentId === agent.id)}
+                    />
+                  ))}
+                </div>
+              </SurfaceColumn>
+            );
+          }
+
+          const consoleState = surfaceConsoleState(
+            simulationKeyFor(surface.key),
+            surfaceEvents,
+            checkResult,
+          );
+          return (
             <SurfaceColumn
               key={surface.key}
               surface={surface}
               tick={tick}
               color={SURFACE_COLORS[surface.key]!}
-            />
-          ),
-        )}
+            >
+              <SurfaceConsole
+                events={consoleState.events}
+                json={consoleState.json}
+              />
+            </SurfaceColumn>
+          );
+        })}
       </div>
+
+      {checkResult && (
+        <details className={styles.fullReport}>
+          <summary>Full consolidated CheckResult JSON</summary>
+          <pre>{JSON.stringify(checkResult, null, 2)}</pre>
+        </details>
+      )}
 
       <SectionLabel className={styles.stagesLabel}>
         Journey stages · agents reaching each
