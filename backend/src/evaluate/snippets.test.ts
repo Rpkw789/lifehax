@@ -36,6 +36,14 @@ describe("offerSnippet", () => {
     expect(() => JSON.parse(`{${offerSnippet(source.target_product)}}`)).not.toThrow();
   });
 
+  test("uses the real price and currency when they are present", () => {
+    const out = offerSnippet(source.target_product);
+    expect(out).toContain("129.99");
+    expect(out).toContain("USD");
+    expect(out).not.toContain("<your price>");
+    expect(out).not.toContain("<your currency>");
+  });
+
   test("never fabricates a price when one is absent", () => {
     const out = offerSnippet({ ...source.target_product, price: null });
     expect(out).not.toContain("0.00");
