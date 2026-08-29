@@ -3,6 +3,10 @@
  * or blocks us is the *finding*, so failures come back as data.
  */
 
+import { LOG_HTTP, logger, since } from "./log";
+
+const httpLog = logger("http");
+
 const UA =
   "Happy2-Readiness-Audit/0.1 (+https://happy2.dev; agent-commerce readiness check)";
 
@@ -27,6 +31,7 @@ export async function get(
   const { timeoutMs = 10_000, redirect = "follow", maxBytes = 2_000_000 } = opts;
   const control = new AbortController();
   const timer = setTimeout(() => control.abort(), timeoutMs);
+  const startedAt = Date.now();
   try {
     const res = await fetch(url, {
       redirect,
@@ -35,6 +40,14 @@ export async function get(
     });
     // Cap the read so one enormous page cannot stall the run.
     const raw = await res.text();
+    if (LOG_HTTP) {
+      httpLog.debug("GET", {
+        url,
+        status: res.status,
+        ms: since(startedAt),
+        bytes: raw.length,
+      });
+    }
     return {
       url,
       status: res.status,
@@ -44,12 +57,14 @@ export async function get(
       finalUrl: res.url || url,
     };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    httpLog.warn("GET failed", { url, ms: since(startedAt), reason });
     return {
       url,
       status: null,
       ok: false,
       body: "",
-      error: err instanceof Error ? err.message : String(err),
+      error: reason,
       finalUrl: url,
     };
   } finally {

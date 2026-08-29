@@ -7,7 +7,7 @@
  * soap, running shoes and skincare unmodified.
  */
 
-import { completeJson, llmConfigured } from "./llm";
+import { completeJson, llmConfigured, type JsonSchema } from "./llm";
 import type { Catalogue, Persona } from "./types";
 
 /** Category-agnostic intents. Safe to hardcode: none names a product type. */
@@ -31,13 +31,35 @@ Rules:
 - One or two sentences. No preamble, no quotes around the text.
 - "name" is a 2-3 word label for the shopper, not the product.
 
-Return: [{"archetype": "...", "name": "...", "prompt": "..."}]`;
+Write one brief per archetype, in the order given.`;
 
 interface Generated {
   archetype: string;
   name: string;
   prompt: string;
 }
+
+/** Structured-output contract, so the reply needs no parsing or repair. */
+const PERSONA_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    personas: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          archetype: { type: "string", enum: ARCHETYPES.map((a) => a.key) },
+          name: { type: "string" },
+          prompt: { type: "string" },
+        },
+        required: ["archetype", "name", "prompt"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["personas"],
+  additionalProperties: false,
+};
 
 export async function generatePersonas(catalogue: Catalogue): Promise<Persona[]> {
   if (!llmConfigured() || catalogue.products.length === 0) {
@@ -56,7 +78,12 @@ export async function generatePersonas(catalogue: Catalogue): Promise<Persona[]>
   const user = `Catalogue:\n${JSON.stringify(summary, null, 2)}\n\nArchetypes: ${ARCHETYPES.map((a) => a.key).join(", ")}`;
 
   try {
-    const generated = await completeJson<Generated[]>(SYSTEM, user, 2000);
+    const { personas: generated } = await completeJson<{ personas: Generated[] }>(
+      SYSTEM,
+      user,
+      PERSONA_SCHEMA,
+      2000,
+    );
     return ARCHETYPES.map((arch, i) => {
       const match =
         generated.find((g) => g.archetype === arch.key) ?? generated[i];

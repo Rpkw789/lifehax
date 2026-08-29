@@ -6,7 +6,7 @@
  * it is given the observed facts to quote rather than asked to guess them.
  */
 
-import { completeJson, llmConfigured } from "./llm";
+import { completeJson, llmConfigured, type JsonSchema } from "./llm";
 import type { AgentEvent, Checks, Finding, Persona, Surface } from "./types";
 
 export function computeSurfaces(checks: Checks): Surface[] {
@@ -103,7 +103,44 @@ Rules:
   name like "Web", "Platform", "Checkout", "SEO".
 - severity is "critical", "high" or "medium".
 
-Return: [{"key","severity","title","evidence","fix","impact","surface","effort","owner","snippetLabel","snippet"}]`;
+Order the findings by how many agents each fix unblocks.`;
+
+/** Structured-output contract for the diagnosis. */
+const FINDINGS_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          key: { type: "string" },
+          severity: { type: "string", enum: ["critical", "high", "medium"] },
+          title: { type: "string" },
+          evidence: {
+            type: "string",
+            description:
+              "Must quote observed URLs, status codes and counts from the audit.",
+          },
+          fix: { type: "string" },
+          impact: { type: "string", description: 'e.g. "+3 agents"' },
+          surface: { type: "string" },
+          effort: { type: "string", description: 'e.g. "1 day"' },
+          owner: { type: "string" },
+          snippetLabel: { type: "string" },
+          snippet: { type: "string" },
+        },
+        required: [
+          "key", "severity", "title", "evidence", "fix", "impact",
+          "surface", "effort", "owner", "snippetLabel", "snippet",
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["findings"],
+  additionalProperties: false,
+};
 
 export async function deriveFindings(
   checks: Checks,
@@ -130,9 +167,10 @@ export async function deriveFindings(
   if (!llmConfigured()) return ruleFindings(checks);
 
   try {
-    const findings = await completeJson<Finding[]>(
+    const { findings } = await completeJson<{ findings: Finding[] }>(
       SYSTEM,
       JSON.stringify(observed, null, 2),
+      FINDINGS_SCHEMA,
       8000,
     );
     const cleaned = findings

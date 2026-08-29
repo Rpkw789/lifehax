@@ -13,9 +13,9 @@ import { PageSkeleton } from "./PageSkeleton";
  * One live session. The URL, the ring's region, the caption and the log lines
  * are all derived from the agent's folded state — nothing is stored per tile.
  *
- * The viewport plays a capture when one is available at
- * `public/tiles/<agentId>.mp4`, and falls back to the stylized skeleton when it
- * is not, so a missing file degrades quietly instead of showing a black box.
+ * The viewport plays a per-agent capture if one exists, otherwise the shared
+ * `fallback.mp4`, otherwise the stylized skeleton. Each step degrades quietly,
+ * so shipping with no captures at all still looks deliberate.
  */
 export function LivestreamTile({
   agent,
@@ -27,7 +27,10 @@ export function LivestreamTile({
   events: AgentEvent[];
   storeHost: string;
 }) {
-  const [hasVideo, setHasVideo] = useState(true);
+  // Per-agent capture first, then the shared one, then the skeleton.
+  const sources = [`/tiles/${agent.id}.mp4`, "/tiles/fallback.mp4"];
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const source = sources[sourceIndex];
 
   const color = agent.persona.color;
   const stageIndex = Math.max(0, Math.min(5, agent.progress));
@@ -77,15 +80,26 @@ export function LivestreamTile({
       </div>
 
       <div className={styles.viewport}>
-        {hasVideo ? (
+        {source ? (
           <video
+            // Remounting on src change is what lets the fallback actually load.
+            key={source}
             className={styles.feed}
-            src={`/tiles/${agent.id}.mp4`}
+            src={source}
             autoPlay
             muted
             loop
             playsInline
-            onError={() => setHasVideo(false)}
+            onError={() => setSourceIndex((i) => i + 1)}
+            onLoadedMetadata={(e) => {
+              // Offset each tile into the clip so four copies of the same
+              // capture do not play in lockstep.
+              const video = e.currentTarget;
+              const seat = Number(agent.id.replace(/\D/g, "")) || 1;
+              if (Number.isFinite(video.duration) && video.duration > 0) {
+                video.currentTime = (seat * 2.5) % video.duration;
+              }
+            }}
           />
         ) : (
           <PageSkeleton />

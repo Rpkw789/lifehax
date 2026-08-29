@@ -16,6 +16,7 @@ import { snapshot } from "./catalogue";
 import { runChecks } from "./checks";
 import { computeSurfaces, deriveFindings } from "./findings";
 import { llmConfigured } from "./llm";
+import { log, since } from "./log";
 import { generatePersonas } from "./personas";
 import { createRun, finish, getRun, publish, subscribe } from "./store";
 import type { StreamMessage } from "./store";
@@ -34,8 +35,20 @@ app.use(
   }),
 );
 
+app.use("*", async (c, next) => {
+  const startedAt = Date.now();
+  await next();
+  // SSE stays open for the life of the run, so its "duration" is not useful.
+  const streaming = c.req.path.endsWith("/events");
+  log.info(`${c.req.method} ${c.req.path}`, {
+    status: c.res.status,
+    ...(streaming ? {} : { ms: since(startedAt) }),
+  });
+});
+
 app.onError((err, c) => {
-  console.error("[error]", err);
+  log.error(`unhandled on ${c.req.method} ${c.req.path}`, err);
+  if (err.stack) console.error(err.stack);
   return c.json({ error: { code: "internal", message: err.message } }, 500);
 });
 
@@ -74,7 +87,9 @@ app.post("/runs", async (c) => {
 
   const run = createRun(input);
   // Fire and forget: the client follows progress over SSE.
-  void orchestrate(run).catch((err) => {
+  void orchestrate(run).catch((err: unknown) => {
+    log.error(`run ${run.runId} failed`, err);
+    if (err instanceof Error && err.stack) console.error(err.stack);
     finish(run, err instanceof Error ? err.message : String(err));
   });
 
@@ -156,8 +171,19 @@ app.get("/runs/:id/events", (c) => {
 
 /** snapshot → personas → audit → agents → findings. */
 async function orchestrate(run: Run): Promise<void> {
+  const runLog = log.child(run.runId);
+  const runStartedAt = Date.now();
+  runLog.info("run starting", { store: run.input.storeUrl });
+
+  let stepAt = Date.now();
   const catalogue = await snapshot(run.input.storeUrl, run.input.sitemapUrl);
   run.catalogue = catalogue;
+  runLog.info("catalogue", {
+    ms: since(stepAt),
+    products: catalogue.products.length,
+    source: catalogue.source,
+    sitemapProducts: catalogue.sitemapProductCount,
+  });
   publish(run, {
     type: "catalogue",
     products: catalogue.products.length,
@@ -165,31 +191,66 @@ async function orchestrate(run: Run): Promise<void> {
   });
 
   if (catalogue.products.length === 0 && catalogue.sitemapProductCount === 0) {
+    runLog.error("nothing discoverable, stopping", { store: run.input.storeUrl });
     finish(run, `no products could be discovered at ${run.input.storeUrl}`);
     return;
   }
 
+  stepAt = Date.now();
   const personas = await generatePersonas(catalogue);
   run.personas = personas;
+  runLog.info("personas", {
+    ms: since(stepAt),
+    count: personas.length,
+    generated: llmConfigured(),
+  });
+  for (const p of personas) runLog.debug(`  brief ${p.tag}`, p.prompt);
   publish(run, { type: "personas", personas });
 
+  stepAt = Date.now();
   const checks = await runChecks(catalogue, run.input);
   run.checks = checks;
+  runLog.info("audit", { ms: since(stepAt), ...checks.totals });
+  runLog.info("  probes", {
+    agentCommerce: checks.agentCommerce.status ?? "err",
+    ucp: checks.ucp.status ?? "err",
+    llmsTxt: checks.llmsTxt.status ?? "err",
+    sitemap: checks.sitemap.status ?? "err",
+    accountWall: checks.checkoutWall.requiresAccount,
+  });
   publish(run, { type: "checks", checks });
 
   await runPopulation(run, catalogue, checks, personas);
 
+  stepAt = Date.now();
   run.surfaces = computeSurfaces(checks);
   run.findings = await deriveFindings(checks, run.events, personas);
+  runLog.info("findings", {
+    ms: since(stepAt),
+    count: run.findings.length,
+    keys: run.findings.map((f) => f.key).join(",") || "none",
+  });
   publish(run, {
     type: "findings",
     findings: run.findings,
     surfaces: run.surfaces,
   });
 
+  const blocked = run.events.filter((e) => e.kind === "fail").length;
+  runLog.info("run complete", {
+    ms: since(runStartedAt),
+    events: run.events.length,
+    blocked,
+  });
   finish(run);
 }
 
-console.log(`happy2 backend on http://localhost:${PORT}`);
+log.info(`listening on http://localhost:${PORT}`, {
+  llm: llmConfigured() ? "configured" : "MISSING (using fallbacks)",
+  browserbase: process.env.BROWSERBASE_API_KEY
+    ? "configured"
+    : "MISSING (real agents will fail)",
+  logLevel: process.env.LOG_LEVEL ?? "info",
+});
 
 export default { port: PORT, fetch: app.fetch, idleTimeout: 255 };

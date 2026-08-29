@@ -15,6 +15,7 @@
 import { browserbase, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
+import { logger, since } from "./log";
 import { emitAgentEvent } from "./store";
 import type { Catalogue, Checks, Persona, Run, StageNumber } from "./types";
 
@@ -25,6 +26,8 @@ const STAGE_TIMEOUT_MS = 45_000;
 const START_GAP_TICKS = 4;
 const STEP_TICKS = 7;
 const MS_PER_TICK = 140;
+
+const agentLog = logger("agents");
 
 export const AGENT_IDS = Array.from(
   { length: 10 },
@@ -43,8 +46,16 @@ export async function runPopulation(
   personas: Persona[],
 ): Promise<void> {
   const realIndices = pickRealAgents(personas.length);
+  agentLog.info("population starting", {
+    real: realIndices.map((i) => AGENT_IDS[i]).join(","),
+    scripted: 10 - realIndices.length,
+  });
 
   const blockers = blockersFrom(checks);
+  agentLog.info("blockers observed in the audit", {
+    count: blockers.length,
+    stages: blockers.map((b) => b.stage).join(",") || "none",
+  });
   const scripted = AGENT_IDS.map((_, i) => i)
     .filter((i) => !realIndices.includes(i))
     .map((i) => runScriptedAgent(run, i, checks, blockers));
@@ -53,7 +64,9 @@ export async function runPopulation(
     runRealAgent(run, i, catalogue, personas[personaIndexOf(i)]!),
   );
 
+  const startedAt = Date.now();
   await Promise.allSettled([...scripted, ...real]);
+  agentLog.info("population settled", { ms: since(startedAt) });
 }
 
 /** Spread the real agents across different briefs so the tiles differ. */
@@ -80,6 +93,7 @@ async function runRealAgent(
   const apiKey = process.env.BROWSERBASE_API_KEY;
 
   if (!apiKey) {
+    agentLog.warn(`${agentId} cannot run: BROWSERBASE_API_KEY is not set`);
     emitAgentEvent(run, agentId, 1, "fail", "BROWSERBASE_API_KEY is not set");
     return;
   }
@@ -97,9 +111,18 @@ async function runRealAgent(
   let stagehand: Stagehand | null = null;
 
   try {
+    const launchedAt = Date.now();
     browser = await browserbase.launch({ apiKey });
     stagehand = await Stagehand.create({ browser });
     if (browser.sessionId) run.sessions[agentId] = browser.sessionId;
+    agentLog.info(`${agentId} browser ready`, {
+      ms: since(launchedAt),
+      target: target.url,
+      // The live session, for watching a run or debugging one after the fact.
+      session: browser.sessionId
+        ? `https://browserbase.com/sessions/${browser.sessionId}`
+        : "none",
+    });
 
     const [page] = await browser.context.pages();
     if (!page) throw new Error("browserbase returned no page");
@@ -149,6 +172,7 @@ async function runRealAgent(
       sh.act("Go to the checkout page. Do not enter any payment information."),
     );
   } catch (err) {
+    agentLog.error(`${agentId} aborted`, err);
     emitAgentEvent(run, agentId, 2, "fail", message(err));
   } finally {
     await stagehand?.close().catch(() => {});
@@ -172,12 +196,16 @@ async function stageValue<T>(
   n: StageNumber,
   work: () => Promise<T>,
 ): Promise<T | null> {
+  const startedAt = Date.now();
   try {
     const value = await withTimeout(work(), STAGE_TIMEOUT_MS);
+    agentLog.info(`${agentId} stage ${n} pass`, { ms: since(startedAt) });
     emitAgentEvent(run, agentId, n, "pass");
     return value;
   } catch (err) {
-    emitAgentEvent(run, agentId, n, "fail", message(err));
+    const reason = message(err);
+    agentLog.warn(`${agentId} stage ${n} FAIL`, { ms: since(startedAt), reason });
+    emitAgentEvent(run, agentId, n, "fail", reason);
     return null;
   }
 }
