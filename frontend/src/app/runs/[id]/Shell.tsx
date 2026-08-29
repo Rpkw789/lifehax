@@ -17,9 +17,13 @@ import styles from "./Shell.module.css";
  */
 export function Shell({ children }: { children: React.ReactNode }) {
   const segment = useSelectedLayoutSegment();
+  // An agent's own page is a drill-down from Check, not a fifth step, so the
+  // stepper and header stay on Check while you are inside one.
   const step: StepKey = STEP_ORDER.includes(segment as StepKey)
     ? (segment as StepKey)
-    : "input";
+    : segment === "agents"
+      ? "check"
+      : "input";
 
   return (
     <div className={styles.shell}>

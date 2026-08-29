@@ -6,7 +6,7 @@
   background: var(--page);
 }
 
-/* Title bar */
+/* Title bar. Also the way into the agent's own page. */
 .titleBar {
   display: flex;
   align-items: center;
@@ -14,6 +14,13 @@
   padding: 9px 11px;
   border-bottom: 1px solid var(--divider);
   background: var(--page);
+  text-decoration: none;
+  color: inherit;
+}
+
+.titleBar:hover {
+  background: var(--nav-hover);
+  color: inherit;
 }
 
 .swatch {
