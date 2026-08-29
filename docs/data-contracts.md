@@ -152,10 +152,42 @@ derived values, empty evidence, and a missing snippet.
 | `GET` | `/runs/:id` | The run resource, including `CheckResult` when complete |
 | `GET` | `/runs/:id/events` | SSE live feed; supports `Last-Event-ID` |
 | `POST` | `/runs/:id/evaluate` | Produce `Finding[]` from the run's `CheckResult` |
+| `GET` | `/stores/:host/personas` | This store's persona edits, `{ overrides }` |
+| `PUT` | `/stores/:host/personas` | Replace them; body is `{ overrides }` |
 | `GET` | `/health` | Liveness |
 
 Errors are `{ "error": { "code", "message" } }` with the class carried by the
 HTTP status. Never a 200 with an error body.
+
+## Persona edits: `PersonaOverride`
+
+The population is generated per run from the store's own catalogue. A user can
+edit a shopper's name or brief on the personas screen; those edits are filed
+against the **store**, not the run, and the generator applies them to that
+store's next run.
+
+```ts
+interface PersonaOverride {
+  tag: string;              // archetype tag, e.g. "BGN"
+  name?: string;            // absent leaves the generated name
+  briefs?: (string | null)[]; // one slot per seat; null keeps the generated brief
+}
+```
+
+Three properties this shape exists to hold:
+
+- **Keyed by tag, not index.** A fresh population is written for every run and
+  only the archetype tag is stable across two of them.
+- **A finished run is never rewritten.** Its personas are the record of what was
+  measured — hard rule 3. An edit made while looking at a finished run is an
+  instruction for the next one, and the screen says so.
+- **Sparse by seat.** A null or absent slot keeps the brief the generator wrote
+  from this store's catalogue, so editing one shopper does not freeze the other
+  nine at some earlier catalogue. Overrides are applied outside the generator's
+  two branches, so a model outage cannot silently discard them.
+
+The store host is the key, lowercased with `www.` dropped, so the same store
+typed two ways does not end up with two sets of edits.
 
 ## Live feed events
 

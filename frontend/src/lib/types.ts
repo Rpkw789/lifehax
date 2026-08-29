@@ -31,6 +31,20 @@ export interface Persona {
 }
 
 /**
+ * An edit made on the personas screen. Mirrors `backend/src/types.ts`.
+ *
+ * Keyed by archetype tag, not index: the backend writes a fresh population for
+ * every run and only the tag survives between two of them. A null brief slot
+ * keeps whatever the generator wrote for that seat.
+ */
+export interface PersonaOverride {
+  tag: string;
+  name?: string;
+  /** One slot per seat in the archetype, in order. */
+  briefs?: (string | null)[];
+}
+
+/**
  * An agent in the population. `fail` is the 1-indexed stage the agent could
  * not enter; 0 means it completed checkout.
  *

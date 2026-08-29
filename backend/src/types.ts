@@ -37,6 +37,24 @@ export interface Persona {
   tag: string;
 }
 
+/**
+ * An edit made on the personas screen, applied over what the generator wrote.
+ *
+ * Keyed by archetype tag rather than by index: the generator writes a fresh
+ * population every run, and only the tag is stable across two of them. A null
+ * or absent brief slot means "keep whatever was generated for that seat", so a
+ * shopper whose brief was never touched still gets a brief written from this
+ * store's own catalogue.
+ */
+export interface PersonaOverride {
+  /** Archetype tag, e.g. "BGN". */
+  tag: string;
+  /** Replacement persona name. Absent leaves the generated one. */
+  name?: string;
+  /** One slot per seat in the archetype, in order. Null keeps the generated brief. */
+  briefs?: (string | null)[];
+}
+
 /** One observation from the run. */
 export interface AgentEvent {
   /** Tick the event landed on. Elapsed seconds = `t * 0.14`. */
