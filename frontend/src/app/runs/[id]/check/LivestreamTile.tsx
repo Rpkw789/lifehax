@@ -206,9 +206,12 @@ export function LivestreamTile({
             › session opening…
           </span>
         ) : (
-          logs.map((event) => (
+          logs.map((event, i) => (
             <span
-              key={`${event.t}-${event.stage}-${event.kind}`}
+              // `t` is a 140ms tick, so two events from one agent inside the
+              // same window collide — a failing browser emits twice. Position
+              // in the agent's own append-only stream is unique by definition.
+              key={events.length - logs.length + i}
               className={`${styles.log} ${
                 event.kind === "fail" ? styles.logFail : ""
               }`}

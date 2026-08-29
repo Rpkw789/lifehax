@@ -285,9 +285,12 @@ export default function CheckScreen() {
         {events
           .slice(-8)
           .reverse()
-          .map((event) => (
+          // Index into the full stream, not the composite: `t` is a 140ms tick,
+          // so one agent failing twice inside a window produces two events that
+          // are identical on every field the key used.
+          .map((event, i) => (
             <div
-              key={`${event.agentId}-${event.stage}-${event.kind}-${event.t}`}
+              key={events.length - 1 - i}
               className={styles.logEntry}
             >
               <span className={styles.logTime}>{elapsedLabel(event.t)}</span>
