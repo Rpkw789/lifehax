@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
-import { STAGES, TILE_IDS } from "@/lib/fixtures";
+import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
 import { elapsedLabel, logText } from "@/lib/simulation";
 import { ramp } from "@/lib/tokens";
@@ -27,6 +27,8 @@ export default function CheckScreen() {
     agents,
     events,
     personas,
+    sessions,
+    tileIds,
   } = useRun();
   const started = useRef(false);
 
@@ -41,9 +43,9 @@ export default function CheckScreen() {
   const won = agents.filter((a) => a.ok).length;
   const hitRate = Math.round((won / agents.length) * 100);
 
-  const tiles = TILE_IDS.map((id) => agents.find((a) => a.id === id)).filter(
-    (a): a is NonNullable<typeof a> => a !== undefined,
-  );
+  const tiles = tileIds
+    .map((id) => agents.find((a) => a.id === id))
+    .filter((a): a is NonNullable<typeof a> => a !== undefined);
 
   const stats: [string, string][] = [
     ["Elapsed", elapsedLabel(tick)],
@@ -155,6 +157,7 @@ export default function CheckScreen() {
               key={agent.id}
               agent={agent}
               storeHost={storeHost}
+              liveViewUrl={sessions[agent.id]}
               events={events.filter((e) => e.agentId === agent.id)}
             />
           ))}

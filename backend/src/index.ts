@@ -131,6 +131,11 @@ app.get("/runs/:id/events", (c) => {
     if (run.personas.length > 0) {
       await send({ type: "personas", personas: run.personas });
     }
+    for (const [agentId, session] of Object.entries(run.sessions)) {
+      if (session.liveViewUrl) {
+        await send({ type: "session", agentId, liveViewUrl: session.liveViewUrl });
+      }
+    }
     if (run.checks) await send({ type: "checks", checks: run.checks });
     for (const event of run.events) await send({ type: "agent", event });
     if (run.findings.length > 0) {

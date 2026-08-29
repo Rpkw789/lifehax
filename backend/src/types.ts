@@ -159,6 +159,9 @@ export interface Run {
   surfaces: Surface[];
   findings: Finding[];
   events: AgentEvent[];
-  /** Browserbase session ids for the agents that really browsed. */
-  sessions: Record<string, string>;
+  /**
+   * Live sessions for the agents that really browsed. The embeddable URL is
+   * only valid while the session runs — Browserbase returns 410 once it stops.
+   */
+  sessions: Record<string, { sessionId: string; liveViewUrl: string | null }>;
 }

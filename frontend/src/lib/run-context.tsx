@@ -65,6 +65,10 @@ interface RunContextValue {
   findings: Finding[];
   surfaces: Surface[];
   catalogueCount: number;
+  /** Embeddable Browserbase live views, by agent id. Only real agents have one. */
+  sessions: Record<string, string>;
+  /** Tiles to show: agents with a live browser first. */
+  tileIds: string[];
 
   openFindings: Record<string, boolean>;
   toggleFinding: (key: string) => void;
@@ -94,6 +98,7 @@ export function RunProvider({
   const [findings, setFindings] = useState<Finding[]>([]);
   const [surfaces, setSurfaces] = useState<Surface[]>([]);
   const [catalogueCount, setCatalogueCount] = useState(0);
+  const [sessions, setSessions] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +116,12 @@ export function RunProvider({
         break;
       case "personas":
         setPersonas(message.personas);
+        break;
+      case "session":
+        setSessions((current) => ({
+          ...current,
+          [message.agentId]: message.liveViewUrl,
+        }));
         break;
       case "agent":
         setEvents((current) => [...current, message.event]);
@@ -134,6 +145,7 @@ export function RunProvider({
     started.current = true;
 
     setEvents([]);
+    setSessions({});
     setFindings([]);
     setSurfaces([]);
     setError(null);
@@ -193,6 +205,14 @@ export function RunProvider({
     [events, shownPersonas, complete],
   );
 
+  // Show the agents that are really driving a browser first — they are the
+  // only ones with something live to look at.
+  const tileIds = useMemo(() => {
+    const live = AGENT_IDS.filter((id) => sessions[id]);
+    const rest = AGENT_IDS.filter((id) => !sessions[id]);
+    return [...live, ...rest].slice(0, 4);
+  }, [sessions]);
+
   const storeHost = useMemo(() => {
     const raw = input.storeUrl.trim();
     if (!raw) return "no store yet";
@@ -219,6 +239,8 @@ export function RunProvider({
       findings,
       surfaces,
       catalogueCount,
+      sessions,
+      tileIds,
       openFindings,
       toggleFinding,
     }),
@@ -239,6 +261,8 @@ export function RunProvider({
       findings,
       surfaces,
       catalogueCount,
+      sessions,
+      tileIds,
       openFindings,
       toggleFinding,
     ],

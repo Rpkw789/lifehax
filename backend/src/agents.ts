@@ -16,7 +16,7 @@ import { browserbase, Stagehand } from "@browserbasehq/stagehand";
 import { z } from "zod";
 
 import { logger, since } from "./log";
-import { emitAgentEvent } from "./store";
+import { emitAgentEvent, publish } from "./store";
 import type { Catalogue, Checks, Persona, Run, StageNumber } from "./types";
 
 const REAL_AGENT_COUNT = Number(process.env.HAPPY2_REAL_AGENTS ?? 3);
@@ -114,13 +114,23 @@ async function runRealAgent(
     const launchedAt = Date.now();
     browser = await browserbase.launch({ apiKey });
     stagehand = await Stagehand.create({ browser });
-    if (browser.sessionId) run.sessions[agentId] = browser.sessionId;
+
+    if (browser.sessionId) {
+      const liveViewUrl = await liveView(browser.sessionId, apiKey);
+      run.sessions[agentId] = { sessionId: browser.sessionId, liveViewUrl };
+      if (liveViewUrl) {
+        publish(run, { type: "session", agentId, liveViewUrl });
+      }
+    }
     agentLog.info(`${agentId} browser ready`, {
       ms: since(launchedAt),
       target: target.url,
       // The live session, for watching a run or debugging one after the fact.
       session: browser.sessionId
         ? `https://browserbase.com/sessions/${browser.sessionId}`
+        : "none",
+      liveView: browser.sessionId
+        ? (run.sessions[agentId]?.liveViewUrl ? "available" : "unavailable")
         : "none",
     });
 
@@ -177,6 +187,33 @@ async function runRealAgent(
   } finally {
     await stagehand?.close().catch(() => {});
     await browser?.close().catch(() => {});
+  }
+}
+
+/**
+ * The embeddable live view for a running session.
+ *
+ * This is not the dashboard link — it is the iframe-able debugger URL, and it
+ * is only valid while the session is alive (Browserbase 410s a stopped one).
+ */
+async function liveView(sessionId: string, apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.browserbase.com/v1/sessions/${sessionId}/debug`,
+      { headers: { "X-BB-API-Key": apiKey } },
+    );
+    if (!res.ok) {
+      agentLog.warn("no live view for session", { sessionId, status: res.status });
+      return null;
+    }
+    const body = (await res.json()) as {
+      debuggerFullscreenUrl?: string;
+      debuggerUrl?: string;
+    };
+    return body.debuggerFullscreenUrl ?? body.debuggerUrl ?? null;
+  } catch (err) {
+    agentLog.warn("live view lookup failed", err);
+    return null;
   }
 }
 

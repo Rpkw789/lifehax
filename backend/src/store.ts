@@ -14,6 +14,7 @@ const subscribers = new Map<string, Set<(e: StreamMessage) => void>>();
 export type StreamMessage =
   | { type: "catalogue"; products: number; source: string }
   | { type: "personas"; personas: Run["personas"] }
+  | { type: "session"; agentId: string; liveViewUrl: string }
   | { type: "checks"; checks: NonNullable<Run["checks"]> }
   | { type: "agent"; event: AgentEvent }
   | { type: "findings"; findings: Run["findings"]; surfaces: Run["surfaces"] }

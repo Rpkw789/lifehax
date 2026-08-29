@@ -11,6 +11,7 @@ export const API_BASE =
 export type StreamMessage =
   | { type: "catalogue"; products: number; source: string }
   | { type: "personas"; personas: Persona[] }
+  | { type: "session"; agentId: string; liveViewUrl: string }
   | { type: "checks"; checks: unknown }
   | { type: "agent"; event: AgentEvent }
   | { type: "findings"; findings: Finding[]; surfaces: Surface[] }
@@ -58,6 +59,7 @@ export function subscribeToRun(
   for (const name of [
     "catalogue",
     "personas",
+    "session",
     "checks",
     "agent",
     "findings",

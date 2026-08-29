@@ -10,27 +10,36 @@ import styles from "./LivestreamTile.module.css";
 import { PageSkeleton } from "./PageSkeleton";
 
 /**
- * One live session. The URL, the ring's region, the caption and the log lines
- * are all derived from the agent's folded state — nothing is stored per tile.
+ * One session tile. The URL, ring, caption and log lines are all derived from
+ * the agent's folded state — nothing is stored per tile.
  *
- * The viewport plays a per-agent capture if one exists, otherwise the shared
- * `fallback.mp4`, otherwise the stylized skeleton. Each step degrades quietly,
- * so shipping with no captures at all still looks deliberate.
+ * The viewport shows, in order of preference:
+ *   1. the real Browserbase live view, while that session is still running
+ *   2. a capture: `/tiles/<agentId>.mp4`, else the shared `fallback.mp4`
+ *   3. the stylized skeleton
+ *
+ * The live view is dropped once the agent settles, because Browserbase returns
+ * 410 for a stopped session and the iframe would go blank.
  */
 export function LivestreamTile({
   agent,
   events,
   storeHost,
+  liveViewUrl,
 }: {
   agent: AgentState;
   /** Every event so far for this agent, oldest first. */
   events: AgentEvent[];
   storeHost: string;
+  /** Browserbase live view, present only for agents really driving a browser. */
+  liveViewUrl?: string;
 }) {
   // Per-agent capture first, then the shared one, then the skeleton.
   const sources = [`/tiles/${agent.id}.mp4`, "/tiles/fallback.mp4"];
   const [sourceIndex, setSourceIndex] = useState(0);
   const source = sources[sourceIndex];
+
+  const showLiveView = Boolean(liveViewUrl) && !agent.settled;
 
   const color = agent.persona.color;
   const stageIndex = Math.max(0, Math.min(5, agent.progress));
@@ -63,7 +72,13 @@ export function LivestreamTile({
                 : ""
           }`}
         >
-          {agent.blocked ? "blocked" : agent.ok ? "done" : STAGES[stageIndex]}
+          {agent.blocked
+            ? "blocked"
+            : agent.ok
+              ? "done"
+              : showLiveView
+                ? `live · ${STAGES[stageIndex]}`
+                : STAGES[stageIndex]}
         </span>
       </div>
 
@@ -80,7 +95,15 @@ export function LivestreamTile({
       </div>
 
       <div className={styles.viewport}>
-        {source ? (
+        {showLiveView ? (
+          <iframe
+            className={styles.feed}
+            src={liveViewUrl}
+            title={`${agent.id} live session`}
+            // No sandbox: this is Browserbase's own devtools viewer and it needs
+            // a websocket back to the session. Sandboxing it renders a blank box.
+          />
+        ) : source ? (
           <video
             // Remounting on src change is what lets the fallback actually load.
             key={source}
