@@ -7,8 +7,9 @@ import type {
 import type { AgentEvent, ShopperAgent } from "../agents/types.ts";
 import { matchProposal } from "../agents/match.ts";
 import type { PersonaBrief } from "../personas/generate.ts";
-import { TimeoutError } from "../runs/retry.ts";
+import { TimeoutError, withTimeout } from "../runs/retry.ts";
 import {
+  fallbackCritique,
   requestSurfaceCritique,
   type SurfaceCritiqueClient,
 } from "./critique.ts";
@@ -29,6 +30,8 @@ export interface WebSearchSimulationInput {
   agent: ShopperAgent;
   emit: SurfaceEventEmitter;
   critiqueClient?: SurfaceCritiqueClient;
+  searchTimeoutMs?: number;
+  critiqueTimeoutMs?: number;
   now?: () => Date;
 }
 
@@ -47,17 +50,19 @@ export async function runWebSearchSimulation(
   const agentEvents: AgentEvent[] = [];
   const evidence: Evidence[] = [];
   try {
-    for await (const event of input.agent.run(input.brief, {
-      runId: input.context.runId,
-      locale: input.context.locale,
-      currency: input.context.currency,
-      storeOrigin: new URL(input.context.storeUrl).origin,
-      fetchPage: (url, signal) => input.context.fetcher.get(url, signal),
-      signal: input.context.signal ?? new AbortController().signal,
-    })) {
-      agentEvents.push(event);
-      mapAgentEvent(event, evidence, input.emit, now);
-    }
+    await withTimeout(async (signal) => {
+      for await (const event of input.agent.run(input.brief, {
+        runId: input.context.runId,
+        locale: input.context.locale,
+        currency: input.context.currency,
+        storeOrigin: new URL(input.context.storeUrl).origin,
+        fetchPage: (url, fetchSignal) => input.context.fetcher.get(url, fetchSignal),
+        signal,
+      })) {
+        agentEvents.push(event);
+        mapAgentEvent(event, evidence, input.emit, now);
+      }
+    }, input.searchTimeoutMs ?? 45_000, "web_search", input.context.signal);
   } catch (error) {
     const code = error instanceof TimeoutError ? "AGENT_TIMEOUT" : "AGENT_ERROR";
     const failureEvidence = addEvidence(evidence, {
@@ -159,24 +164,45 @@ export async function runWebSearchSimulation(
     "Critiquing the search journey and deterministic match evidence",
     null,
   );
-  const critiqueResult = await requestSurfaceCritique(
-    {
-      surface: "web_search",
-      facts: [
-        `Search returned ${citations.length} cited results`,
-        targetRank === null
-          ? "The target was not recommended"
-          : `The target was recommended at rank ${targetRank}`,
-      ],
-      evidence,
-      target: input.context.target,
-      brief: input.context.brief,
-      locale: input.context.locale,
-      currency: input.context.currency,
-      signal: input.context.signal,
-    },
-    input.critiqueClient,
-  );
+  const critiqueFacts = [
+    `Search returned ${citations.length} cited results`,
+    targetRank === null
+      ? "The target was not recommended"
+      : `The target was recommended at rank ${targetRank}`,
+  ];
+  let critiqueResult;
+  try {
+    critiqueResult = await withTimeout(
+      (signal) => requestSurfaceCritique(
+        {
+          surface: "web_search",
+          facts: critiqueFacts,
+          evidence,
+          target: input.context.target,
+          brief: input.context.brief,
+          locale: input.context.locale,
+          currency: input.context.currency,
+          signal,
+        },
+        input.critiqueClient,
+      ),
+      input.critiqueTimeoutMs ?? 15_000,
+      "web_search critique",
+      input.context.signal,
+    );
+  } catch (error) {
+    if (!(error instanceof TimeoutError)) throw error;
+    critiqueResult = {
+      critique: fallbackCritique(critiqueFacts, evidence),
+      source: "fallback" as const,
+    };
+    input.emit(
+      "web_search",
+      "model",
+      "Critique timed out; preserving completed search results",
+      null,
+    );
+  }
   const modelEvidence = addEvidence(evidence, {
     kind: "model_output",
     at: now().toISOString(),

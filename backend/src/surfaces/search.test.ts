@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SurfaceSimulationEvent } from "@contracts/surface-simulation";
 import type { ShopperAgent } from "../agents/types.ts";
-import { TimeoutError } from "../runs/retry.ts";
+import { TimeoutError, withTimeout } from "../runs/retry.ts";
 import { runWebSearchSimulation } from "./search.ts";
 
 const target = {
@@ -130,6 +130,66 @@ describe("runWebSearchSimulation", () => {
     const terminal = events.at(-1);
     expect(terminal?.evidence_id).not.toBeNull();
     expect(result.evidence.some((item) => item.evidence_id === terminal?.evidence_id)).toBe(true);
+  });
+
+  test("preserves completed search results when the optional critique times out", async () => {
+    const events: SurfaceSimulationEvent[] = [];
+    const agent: ShopperAgent = {
+      kind: "shared-search",
+      model: "openai/test-model",
+      async *run(persona, context) {
+        const base = {
+          run_id: context.runId,
+          query_id: persona.query_id,
+          agent_id: "agent_surface_001",
+          agent_kind: "shared-search" as const,
+        };
+        yield { ...base, type: "agent.query", query: persona.query };
+        yield { ...base, type: "agent.api", endpoint: "responses", latency_ms: 12 };
+        yield {
+          ...base,
+          type: "agent.citation",
+          title: target.name,
+          url: target.canonical_url,
+          position: 1,
+        };
+        yield {
+          ...base,
+          type: "agent.verdict",
+          proposal: {
+            candidates: [
+              { name: target.name, url: target.canonical_url, reason_codes: [] },
+            ],
+            purchase_intent: "high",
+            confidence: 0.9,
+          },
+        };
+      },
+    };
+
+    const result = await withTimeout(
+      () => runWebSearchSimulation({
+        context: workerContext(),
+        brief,
+        agent,
+        emit: emitter(events),
+        searchTimeoutMs: 25,
+        critiqueTimeoutMs: 5,
+        critiqueClient: async () => new Promise<never>(() => undefined),
+      }),
+      50,
+      "critique timeout regression",
+    );
+
+    expect(result.run.agent.model).toBe("openai/test-model");
+    expect(result.run.outcome.target_recommended).toBe(true);
+    expect(result.run.outcome.target_rank).toBe(1);
+    expect(result.run.ranked_candidates).toHaveLength(1);
+    expect(result.critique?.summary).toContain("deterministic assessment");
+    expect(events.some((event) => event.message.includes("Critique timed out"))).toBe(true);
+    expect(events.at(-1)?.message).toBe(
+      "Search simulation settled: target recommended at rank 1",
+    );
   });
 });
 

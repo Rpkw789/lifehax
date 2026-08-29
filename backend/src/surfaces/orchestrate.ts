@@ -57,6 +57,7 @@ export interface SurfaceSimulationDependencies {
   guideWorker?: StandardWorker;
   searchWorker?: SearchWorker;
   workerTimeoutMs?: number;
+  critiqueTimeoutMs?: number;
 }
 
 export async function runSurfaceSimulations(
@@ -76,6 +77,8 @@ export async function runSurfaceSimulations(
     fetcher: input.fetcher,
     signal: input.signal,
   };
+  const workerTimeoutMs = dependencies.workerTimeoutMs ?? 45_000;
+  const critiqueTimeoutMs = dependencies.critiqueTimeoutMs ?? 15_000;
   const protocolWorker = dependencies.protocolWorker ?? ((workerContext, emit) =>
     runProtocolSimulation(workerContext, emit, {
       acpPath: input.acpPath,
@@ -92,12 +95,18 @@ export async function runSurfaceSimulations(
       agent: dependencies.agent ?? unavailableSearchAgent,
       emit,
       critiqueClient: dependencies.critiqueClient,
+      searchTimeoutMs: workerTimeoutMs,
+      critiqueTimeoutMs,
     }));
 
+  const searchSettleTimeoutMs = dependencies.searchWorker === undefined
+    ? workerTimeoutMs + critiqueTimeoutMs + timeoutSettleMargin(critiqueTimeoutMs)
+    : workerTimeoutMs;
+
   const [protocol, guide, search] = await Promise.all([
-    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker, dependencies.workerTimeoutMs ?? 45_000, input.acpPath),
-    settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker, dependencies.workerTimeoutMs ?? 45_000),
-    settleSearch(context, brief, dependencies, searchWorker, dependencies.workerTimeoutMs ?? 45_000),
+    settleStandard("agent_protocol", context, dependencies.emitForWorker, protocolWorker, workerTimeoutMs, input.acpPath),
+    settleStandard("model_readable_guide", context, dependencies.emitForWorker, guideWorker, workerTimeoutMs),
+    settleSearch(context, brief, dependencies, searchWorker, searchSettleTimeoutMs),
   ]);
 
   return buildSurfaceCheckResult({
@@ -114,6 +123,10 @@ export async function runSurfaceSimulations(
     guide,
     search,
   });
+}
+
+function timeoutSettleMargin(critiqueTimeoutMs: number): number {
+  return Math.min(1_000, Math.max(25, Math.ceil(critiqueTimeoutMs * 0.1)));
 }
 
 export function createSurfaceEventEmitter(
