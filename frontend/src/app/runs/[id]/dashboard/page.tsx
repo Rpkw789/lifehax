@@ -3,8 +3,11 @@
 import type { CheckResult } from "@contracts/check-result";
 import checkResultFixture from "@fixtures/check-result.example.json";
 
+import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
+import { funnelSteps } from "@/lib/funnel";
 import { formatRank, formatRate, queryOutcomes } from "@/lib/scores";
+import { Funnel } from "./Funnel";
 import styles from "./dashboard.module.css";
 
 // Placeholder source until the run resource is wired up. Same shape either way.
@@ -47,6 +50,11 @@ export default function DashboardScreen() {
               <div className={styles.tileLabel}>Agents that recommended you</div>
             </div>
           </div>
+        </section>
+
+        <section>
+          <SectionLabel>Where agents dropped out</SectionLabel>
+          <Funnel steps={funnelSteps(source)} />
         </section>
 
         <section>
@@ -109,12 +117,11 @@ export default function DashboardScreen() {
             {SURFACE_LABELS.map(([key, label]) => (
               <div className={styles.bar} key={key}>
                 <span>{label}</span>
-                <span className={styles.barTrack}>
-                  <span
-                    className={styles.barFill}
-                    style={{ width: `${scores.surfaces[key]}%` }}
-                  />
-                </span>
+                <ChevronTrack
+                  count={20}
+                  fraction={scores.surfaces[key] / 100}
+                  fill="var(--ink)"
+                />
                 <span className={styles.barValue}>{scores.surfaces[key]}</span>
               </div>
             ))}

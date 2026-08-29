@@ -1,0 +1,102 @@
+.funnel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A step, and beneath it the gap that carries the drop annotation. */
+.step {
+  display: grid;
+  grid-template-columns: 168px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 0;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+/* The track indents as the cohort narrows, so the silhouette is the funnel. */
+.trackCell {
+  display: flex;
+  justify-content: flex-start;
+  padding-left: var(--indent, 0px);
+  transition: padding-left 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--ink);
+  min-width: 44px;
+  text-align: right;
+}
+
+.of {
+  color: var(--faint);
+}
+
+/* The drop belongs to the step it reduced, so it hangs beneath it. */
+.drop {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 16px;
+}
+
+.dropBody {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-left: 1px solid var(--divider);
+  padding: 0 0 4px 12px;
+  opacity: 0;
+  transform: translateY(-2px);
+  animation: settle 320ms ease forwards;
+}
+
+.dropCount {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--blocked);
+}
+
+.dropReason {
+  font-size: 12px;
+  color: var(--tertiary);
+}
+
+@keyframes settle {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trackCell {
+    transition: none;
+  }
+
+  .dropBody {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .step {
+    grid-template-columns: 116px 1fr auto;
+    gap: 10px;
+  }
+
+  .drop {
+    grid-template-columns: 116px 1fr;
+    gap: 10px;
+  }
+
+  .trackCell {
+    padding-left: 0;
+  }
+}
