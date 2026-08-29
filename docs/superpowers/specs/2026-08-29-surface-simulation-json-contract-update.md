@@ -1,7 +1,7 @@
 # Surface simulation JSON contract update
 
 **Date:** 2026-08-29
-**Status:** Approved proposal, pre-implementation
+**Status:** Implemented on `feature/surface-simulations`
 **Related design:**
 `docs/superpowers/specs/2026-08-29-surface-simulations-design.md`
 
@@ -19,8 +19,9 @@ condition described below.
 
 ## New shared type
 
-The source of truth will live in a focused shared contract file rather than
-duplicated backend/frontend types.
+The source of truth lives in
+`shared/contracts/surface-simulation.ts`; backend and frontend import it rather
+than defining local equivalents.
 
 ```ts
 export type SurfaceSimulationKey =
@@ -77,13 +78,13 @@ Representative progress event:
 {
   "type": "surface_simulation",
   "event": {
-    "event_id": "surf_guide_0004",
+    "event_id": "surf_0013",
     "sequence": 12,
     "surface": "model_readable_guide",
     "phase": "parse",
     "at": "2026-08-29T10:25:03.114Z",
-    "message": "Parsed one title, three link sections and six links",
-    "evidence_id": "ev_guide_parse_01"
+    "message": "Parsed 6 links across 3 sections",
+    "evidence_id": "ev_guide_assessment"
   }
 }
 ```
@@ -103,9 +104,10 @@ object before placing it in `result`.
 - `match`: deterministic URL/domain/product matching produced a fact.
 - `result`: the individual surface settled.
 
-Events are append-only. They are stored on the in-memory run and replayed in
-`sequence` order. The frontend deduplicates by `event_id` before appending.
-Neither the backend nor frontend manufactures delayed lines for animation.
+Events are append-only. The backend assigns zero-based global sequence values,
+stores each `event_id` once, and sorts replay by `sequence`. The frontend also
+deduplicates by `event_id` before appending, making reconnect replay idempotent.
+Neither side manufactures delayed lines for animation.
 
 ## Evidence linkage
 
@@ -126,7 +128,7 @@ The existing Browser `AgentEvent` remains unchanged. Browser events continue to
 use the current `type: "agent"` envelope and existing camelCase fields. No
 consumer must reinterpret a Browser event as a surface event.
 
-The planned final report remains schema version `1.1.0` and uses the existing
+The final report remains schema version `1.1.0` and uses the existing
 homes:
 
 - `site_audit.agent_commerce`
@@ -149,18 +151,19 @@ homes:
 
 ## Validation
 
-The new event contract receives a dependency-free runtime validator covering:
+The event contract has a dependency-free runtime validator covering:
 
 - known surface and phase values;
-- non-empty unique `event_id`;
+- non-empty `event_id` (uniqueness is enforced by the run store);
 - non-negative integer `sequence`;
 - valid ISO timestamp;
-- non-empty safe display message; and
+- non-empty display message; and
 - nullable non-empty `evidence_id`.
 
-Before publishing `check_result`, the backend calls `assertCheckResult()`. A
-test also verifies that every non-null surface-event evidence reference resolves
-in the completed result.
+Before publishing `check_result`, the report builder calls
+`assertCheckResult()`. Focused tests cover report validity, deterministic score
+agreement, run-store deduplication, ordered SSE replay, and frontend replay
+deduplication.
 
 ## Compatibility
 
@@ -168,16 +171,20 @@ Adding new SSE event names is additive. Existing EventSource clients do not
 listen for them and continue working. The Browser `AgentEvent` and existing
 `CheckResult` fields do not change.
 
-Frontend and backend land together because the current stream union is copied
-between them. The new surface-event type itself is imported from shared code so
-future drift becomes a type error.
+Frontend and backend land together. Their SSE envelope unions remain local to
+each service, while the event payload and `CheckResult` are imported from shared
+code so payload drift becomes a type error.
 
 ## Stop condition for a `CheckResult` change
 
-If serialized `model_output` evidence cannot represent a critique without
-ambiguous ownership or unsafe parsing, implementation stops before changing the
-report type. This document must then be revised to propose explicit fields,
-followed by approval and the required coordinated update to:
+This stop condition was not reached: serialized `model_output` evidence
+represents each critique without changing `CheckResult` schema version `1.1.0`.
+
+If a future implementation finds that serialized `model_output` evidence
+cannot represent a critique without ambiguous ownership or unsafe parsing,
+implementation stops before changing the report type. This document must then
+be revised to propose explicit fields, followed by approval and the required
+coordinated update to:
 
 1. `shared/contracts/`;
 2. `shared/contracts/validate.ts`;

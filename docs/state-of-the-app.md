@@ -1,170 +1,109 @@
 # State of the app
 
-Measured on `main` at `c7f7cec`, not from memory. Reachability is an import
-walk from `backend/src/index.ts`; everything else is a grep or a live request.
+Measured on `feature/surface-simulations` on 2026-08-29. This report separates
+behavior verified by recorded tests from behavior that still requires runtime
+credentials and a public store.
 
-Rerun the walk with the snippet at the bottom before trusting these numbers —
-they move every time someone pushes.
+## What works now
 
-## What genuinely works
+- The legacy catalogue crawl, site audit, Browser population, findings, and SSE
+  flow remain connected to `backend/src/index.ts`.
+- Check launches three additional read-only simulations against one selected
+  product and one enabled shopper brief while the Browser population runs.
+- Agent protocol fetches the configured ACP convention (default
+  `/.well-known/agent-commerce`) and `/.well-known/ucp`. HTTP 200 alone is not
+  treated as support: HTML soft-404s, malformed JSON, and incomplete UCP
+  profiles settle as unavailable or unsupported.
+- Model-readable guide fetches `/llms.txt`, parses its title, summary, sections,
+  links, and direct target coverage, then follows at most three relevant
+  same-origin HTTP links for content assessment. Missing files display “Unable
+  to be found”; retrieval failures display “Unable to verify.”
+- Web search runs one shared-search shopper brief without adding the audited
+  brand, domain, or canonical URL to that brief. Citations and fetched pages are
+  matched to the target deterministically; model output never decides discovery,
+  identity, rank, recommendation, or score.
+- When Cloudflare credentials are configured, all three methods can receive a
+  bounded model-generated critique whose points must cite evidence IDs from the
+  same run. Invalid critiques retry once, then fall back without killing the run.
+- Surface progress uses the shared append-only `SurfaceSimulationEvent`. The run
+  store deduplicates and replays events in sequence order; the frontend performs
+  a second idempotent fold for reconnects.
+- Check renders the three new methods as plain dark consoles with white text.
+  Lines appear only when backend milestones happen. Each settled console can
+  disclose its relevant report slice, and the page can disclose the complete
+  consolidated `CheckResult`.
+- The consolidated report keeps schema `1.1.0`: protocol and guide results live
+  in `site_audit`, the single Web-search run lives in `agent_runs[0]`, and fetch,
+  extraction, search, and critique evidence lives in `evidence[]`.
 
-Verified against a real run on `allbirds.com`:
+## Verification snapshot
 
-- **Catalogue crawl** — 12 products from `products.json`, 293 from the sitemap.
-- **Site audit probes** — `agentCommerce=404 ucp=200 llmsTxt=200 sitemap=200`.
-- **Structured-data checks** — `withJsonLd=4 withOfferPrice=4 priceInServedHtml=4 withCartForm=0`.
-- **Surface scores** — `computeSurfaces()` is arithmetic over those probes. No
-  model decides a number.
-- **Three real browser agents** via Browserbase and Stagehand.
-- **SSE streaming** — Input, Check and Recommend all read the live run.
-- **The Evaluate engine** — deterministic rules, contract-validated, 114 tests.
+Recorded tests make no network calls.
 
-## What does not work, in the order worth fixing
-
-### 1. The LLM is not connected
-
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are one character each in
-the working `.env`, so the gateway returns `401` and `findings.ts` falls back to
-`ruleFindings`. Every finding and persona shown so far is canned. The last real
-run produced **one** finding.
-
-`/health` reports `llm: true` because it only checks the variables are
-non-empty, not that they work.
-
-**Fix:** a real account id and an **AI Gateway token** with the `AI Gateway Run`
-permission, created inside the gateway's Settings. A general Cloudflare API
-token produces exactly this 401. Confirm `CLOUDFLARE_GATEWAY_ID` is the
-gateway's real name.
-
-This is one config change and it is the largest gap between what the product
-claims and what it does.
-
-### 2. Half the backend never executes
-
-**25 of 50 modules, 2,416 lines, unreachable from `index.ts`.**
-
-| Area | Dark modules |
-| --- | --- |
-| `agents/` | 8 |
-| `catalogue/` | 5 |
-| `runs/` | 4 |
-| `personas/`, `models/` | 2 each |
-| `audit/`, `score/` | 1 each |
-| root (`env.ts`, `fixtures.ts`) | 2 |
-
-Nothing calls `runSimulation`. The server still imports the older flat files —
-`agents.ts`, `catalogue.ts`, `checks.ts`, `personas.ts`, `findings.ts`.
-
-So there are two of almost everything: two catalogue readers, two persona
-generators, two agent systems, two scoring paths. The dark half is the better
-one — tested, contract-shaped, 20 passing tests — and it is invisible to users.
-
-**This needs a decision, not a fix.** Either wire `runSimulation` in and delete
-the flat files, or shelve the new stack and stop growing it. Carrying both is
-how a hackathon codebase doubles in a day.
-
-### 3. Seven of ten agents are scripted
-
-`agents.ts` says so itself:
-
-> Their failure reasons are pulled from the real audit so the console never
-> states something untrue about the store, but their pass/fail pattern is not a
-> measurement. Do not report them as one.
-
-The last real run makes the gap concrete. Stages cleared per agent:
-
-```
-A01: 1   A02: 4   A03: 4   A04: 1   A05: 4
-A06: 4   A07: 1   A08: 4   A09: 4   A10: 6
+```text
+backend:  141 tests passed, 0 failed; tsc --noEmit passed
+frontend:  12 tests passed, 0 failed; tsc --noEmit passed
+frontend:  next build completed successfully
 ```
 
-`A01`, `A04` and `A07` are the three real Browserbase agents. They cleared
-**one** stage each. The seven that reached stage 4 are scripted. The dashboard
-funnel presents both as measured.
+The backend import walk reports 51 live modules and 8 dark modules out of 59
+non-test TypeScript modules. The remaining dark set is the standalone newer
+full-run orchestrator, native-search lane, environment adapter, and fixture
+loader; the shared Cloudflare search client, safe origin fetcher, deterministic
+matcher/scorer, and surface stack are live through `index.ts`.
 
-Three is not arbitrary — the Browserbase free tier allows 3 concurrent
-browsers and 5 session requests per minute. Raising `HAPPY2_REAL_AGENTS`
-without pooling more keys trips a `429`.
+## Runtime requirements and graceful degradation
 
-**Options:** pool more keys, or mark scripted agents in the UI. Saying "10
-agents shopped your store" is not currently true.
+Model and shared Web-search calls use:
 
-### 4. Prototype fixtures still drive the Check screen
+```text
+POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1/messages
+Authorization: Bearer <CLOUDFLARE_API_TOKEN>
+```
 
-`LivestreamTile.tsx` reads four hardcoded constants from `lib/fixtures.ts`:
+The token needs `Account > Workers AI > Read`, the account needs Unified Billing
+credits, and `HAPPY2_MODEL` is provider-prefixed. If credentials are missing or
+a model call fails, protocol/guide HTTP evidence still runs, critiques fall back,
+and Web search records `AGENT_ERROR` rather than aborting the overall run.
 
-- `TILE_CLIPS` — canned mp4s of Sephora, Shein, Shopee, Footlocker and others.
-  Tiles without a live Browserbase session play stock footage of stores nobody
-  audited.
-- `RING_REGIONS`, `STAGE_PATHS`, `STAGE_ACTIONS` — focus rings, URL bars and
-  action captions, all prototype copy.
+No live public-store run was claimed during this implementation because the
+verification environment did not provide runtime credentials. The production
+build required network access only to fetch the project’s configured Google
+fonts.
 
-`STAGE_PASS_LOGS` feeds the console the same way. `TILE_IDS` is now unused and
-can go.
+## Known limitations that remain
 
-Category strings live here too — `desk+lamp+dimmable`, `atlas-lamp` — which
-breaks the no-product-category rule in `AGENTS.md` once these reach real data.
-
-### 5. The Evaluate endpoint is unreachable by clicking
-
-`POST /runs/:id/evaluate` works and is tested, but no screen calls it. Recommend
-uses findings from the SSE stream instead. The lane is reachable by `curl` only.
-
-That is a consequence of item 2 — Evaluate consumes a `CheckResult`, which only
-the dark pipeline produces.
+1. The existing Browser population still mixes real Browserbase sessions with
+   scripted agents according to account quota. This change deliberately leaves
+   `LivestreamTile`, Browser `AgentEvent`, stage board, funnel, recommendations,
+   and dashboard behavior untouched.
+2. Prototype Browser tile clips and stage captions remain in the legacy UI.
+3. `POST /runs/:id/evaluate` remains API-only; the Recommend screen still uses
+   findings from the legacy SSE lane.
+4. Runs are stored in memory. Restarting the backend loses run history, and no
+   re-run or hosted-artifact loop exists yet.
+5. `CheckResult` is published for the new three-method assessment, but the
+   Evaluate endpoint is not automatically invoked with it.
 
 ## Live endpoints
 
-```
+```text
 GET  /health
 POST /runs
 GET  /runs/:id
-GET  /runs/:id/events      SSE
-POST /runs/:id/evaluate    works, unused by the UI
+GET  /runs/:id/events      SSE, including surface_simulation and check_result
+POST /runs/:id/evaluate
 ```
 
-No re-run, no run history, no artifact hosting. The self-verifying loop in
-`SPEC.md` has no backing endpoint: nothing persists a run or links one to a
-previous one.
+## Remaining dark modules
 
-## Decisions this needs
-
-1. **Who fixes the Cloudflare credentials, and when.** Everything else is
-   cosmetic next to it.
-2. **Does `runSimulation` replace `runPopulation` before the demo?** If yes,
-   wire it and delete the flat files. If no, stop adding to `agents/`,
-   `catalogue/`, `runs/`.
-3. **How do we describe the agent population?** Three real, or pool keys for
-   more, or label the scripted ones.
-4. **Do the tile clips stay?** They demo well and they are footage of other
-   people's stores.
-
-## Rerunning the reachability walk
-
-```sh
-cd backend && python3 - <<'PY'
-import os, re, pathlib
-root = pathlib.Path("src")
-files = {str(p) for p in root.rglob("*.ts") if ".test." not in p.name}
-def imports(p):
-    out = set()
-    for m in re.finditer(r'from\s+"(\./[^"]+|\.\./[^"]+)"', pathlib.Path(p).read_text()):
-        b = os.path.normpath(os.path.join(os.path.dirname(p), m.group(1).replace(".ts", "")))
-        for c in (b + ".ts", os.path.join(b, "index.ts")):
-            if c in files:
-                out.add(c)
-                break
-    return out
-seen, stack = set(), ["src/index.ts"]
-while stack:
-    f = stack.pop()
-    if f in seen or f not in files:
-        continue
-    seen.add(f)
-    stack.extend(imports(f))
-dark = sorted(files - seen)
-print(f"live={len(seen)} dark={len(dark)}")
-for f in dark:
-    print(" ", f)
-PY
+```text
+src/agents/native-client.ts
+src/agents/native-search.ts
+src/env.ts
+src/fixtures.ts
+src/models/anthropic.ts
+src/runs/orchestrator.ts
+src/runs/queue.ts
+src/runs/services.ts
 ```
