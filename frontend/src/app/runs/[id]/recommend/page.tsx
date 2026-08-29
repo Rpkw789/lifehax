@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { ChevronTrack } from "@/components/ChevronTrack";
 import { SectionLabel } from "@/components/SectionLabel";
-import { FINDINGS, PERSONAS, STAGES, SURFACE_SCORES } from "@/lib/fixtures";
+import { STAGES } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
-import { TOTAL_TICKS, agentStates } from "@/lib/simulation";
 import type { Severity } from "@/lib/types";
 import styles from "./recommend.module.css";
 
@@ -37,11 +36,15 @@ function Caret({ open }: { open: boolean }) {
 
 export default function RecommendScreen() {
   const router = useRouter();
-  const { runId, openFindings, toggleFinding, startRun } = useRun();
-
-  // This screen reads a finished run, so it derives from the final tick
-  // regardless of where the clock happens to be sitting.
-  const agents = agentStates(TOTAL_TICKS);
+  const {
+    runId,
+    openFindings,
+    toggleFinding,
+    agents,
+    personas,
+    findings,
+    surfaces,
+  } = useRun();
 
   return (
     <div className={styles.screen}>
@@ -67,19 +70,16 @@ export default function RecommendScreen() {
               <Button>Export findings</Button>
               <Button
                 variant="outlineSoft"
-                onClick={() => {
-                  startRun();
-                  router.push(`/runs/${runId}/check`);
-                }}
+                onClick={() => router.push(`/runs/${runId}/input`)}
               >
-                Re-run simulation
+                New run
               </Button>
             </div>
           </div>
         </div>
 
         <div className={styles.surfaces}>
-          {SURFACE_SCORES.map((surface) => (
+          {surfaces.map((surface) => (
             <div key={surface.name} className={styles.surfaceCard}>
               <div className={styles.surfaceTop}>
                 <span className={styles.surfaceName}>{surface.name}</span>
@@ -115,7 +115,7 @@ export default function RecommendScreen() {
             </div>
           </div>
 
-          {PERSONAS.map((persona, personaIndex) => {
+          {personas.map((persona, personaIndex) => {
             const group = agents.filter((a) => a.personaIndex === personaIndex);
             return (
               <div key={persona.tag} className={styles.matrixRow}>
@@ -160,7 +160,7 @@ export default function RecommendScreen() {
           Recommendations · ordered by agents unblocked
         </SectionLabel>
         <div className={styles.findings}>
-          {FINDINGS.map((finding) => {
+          {findings.map((finding) => {
             const open = !!openFindings[finding.key];
             return (
               <div key={finding.key} className={styles.finding}>

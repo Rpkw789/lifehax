@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/Button";
-import { PERSONAS } from "@/lib/fixtures";
 import { useRun } from "@/lib/run-context";
 import type { RunInput } from "@/lib/types";
 import styles from "./input.module.css";
@@ -50,9 +49,12 @@ export default function InputScreen() {
     togglePersona,
     activePersonaCount,
     startRun,
+    personas,
+    error,
   } = useRun();
 
   const run = () => {
+    if (!input.storeUrl.trim()) return;
     startRun();
     router.push(`/runs/${runId}/check`);
   };
@@ -109,11 +111,11 @@ export default function InputScreen() {
           <div className={styles.cardHeader}>
             <div className={styles.cardLabel}>Agent population</div>
             <div className={styles.populationNote}>
-              {activePersonaCount} of {PERSONAS.length} briefs · 2 agents each
+              {activePersonaCount} of {personas.length} briefs · 2 agents each
             </div>
           </div>
           <div className={styles.personaList}>
-            {PERSONAS.map((persona, index) => {
+            {personas.map((persona, index) => {
               const on = !input.disabledPersonas.includes(index);
               return (
                 <button
@@ -151,11 +153,11 @@ export default function InputScreen() {
         </section>
 
         <div className={styles.actions}>
-          <Button size="lg" onClick={run}>
+          <Button size="lg" onClick={run} disabled={!input.storeUrl.trim()}>
             Run simulation
           </Button>
           <div className={styles.estimate}>
-            ≈ 9s · {activePersonaCount * 2} sessions across 4 surfaces
+            {error ?? `${activePersonaCount * 2} sessions across 4 surfaces`}
           </div>
         </div>
       </div>
