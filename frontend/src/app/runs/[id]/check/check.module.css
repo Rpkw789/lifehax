@@ -109,7 +109,9 @@
   background: var(--page);
 }
 
-.stageCardBlocked {
+/* Emphasis has changed hands: the stage that stopped nobody is the one worth
+   looking at, so it takes the stronger border a blocked stage used to. */
+.stageCardUnguarded {
   border-color: var(--border-strong);
 }
 
@@ -205,7 +207,8 @@
   background: var(--page);
 }
 
-.boardRowBlocked {
+/* An agent that walked the whole journey unchallenged is the row to notice. */
+.boardRowThrough {
   background: var(--soft);
 }
 

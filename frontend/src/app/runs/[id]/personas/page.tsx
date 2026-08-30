@@ -65,7 +65,7 @@ function spreadOf(agents: AgentState[]) {
     },
     {
       key: "reached",
-      label: "reached checkout",
+      label: "through unchallenged",
       count: agents.filter((a) => a.ok).length,
       tint: "var(--ink)",
     },
@@ -185,7 +185,7 @@ export default function PersonasScreen() {
           </div>
           <div>
             <div className={styles.value}>{won}</div>
-            <div className={styles.label}>reached checkout</div>
+            <div className={styles.label}>through unchallenged</div>
           </div>
         </div>
 
@@ -276,11 +276,11 @@ export default function PersonasScreen() {
                   )}
                 </div>
                 <span className={styles.progress}>
-                  {reached}/{group.agents.length} reached checkout
+                  {reached}/{group.agents.length} got through
                 </span>
                 <span
                   className={`${styles.pill} ${
-                    reached === 0 ? styles.pillFail : styles.pillOk
+                    reached === 0 ? styles.pillOk : styles.pillFail
                   }`}
                 >
                   {reached === 0

@@ -22,7 +22,8 @@ export interface RunExport {
   storeUrl: string;
   exportedAt: string;
   catalogueCount: number;
-  readiness: { score: number; verdict: string };
+  defence: { score: number; verdict: string };
+  surfaceReadability: { score: number; verdict: string };
   agents: ExportedAgent[];
   surfaces: Surface[];
   findings: Finding[];
@@ -34,9 +35,11 @@ export function buildRunJson(run: RunExport): string {
 
 export function buildFindingsMarkdown(run: RunExport): string {
   const lines: string[] = [
-    `# AI readiness — ${run.storeUrl}`,
+    `# Bot exposure — ${run.storeUrl}`,
     "",
-    `**${run.readiness.score}/100 · ${run.readiness.verdict}**`,
+    `**${run.defence.score}/100 · ${run.defence.verdict}**`,
+    "",
+    `Machine readability: ${run.surfaceReadability.score}/100 · ${run.surfaceReadability.verdict}.`,
     "",
     `${run.catalogueCount} products read. Exported ${run.exportedAt}.`,
     "",
@@ -48,6 +51,8 @@ export function buildFindingsMarkdown(run: RunExport): string {
     "",
     "## Agents",
     "",
+    "An outcome of `completed` means the agent reached checkout unchallenged.",
+    "",
     "| Agent | Brief | Stages cleared | Outcome |",
     "| --- | --- | --- | --- |",
     ...run.agents.map(
@@ -58,7 +63,7 @@ export function buildFindingsMarkdown(run: RunExport): string {
   ];
 
   if (run.findings.length === 0) {
-    lines.push("No findings: nothing in this run blocked an agent.", "");
+    lines.push("No findings: nothing in this run let an agent through.", "");
     return lines.join("\n");
   }
 

@@ -67,8 +67,12 @@ export default function CheckScreen() {
   }, [restore, running, complete, startRun]);
 
   const settled = agents.filter((a) => a.settled).length;
-  const won = agents.filter((a) => a.ok).length;
-  const hitRate = Math.round((won / Math.max(1, agents.length)) * 100);
+  // `ok` means the agent walked the whole journey and nothing stopped it. That
+  // is the failure this screen is looking for, not the success it used to be.
+  const throughToCheckout = agents.filter((a) => a.ok).length;
+  const throughRate = Math.round(
+    (throughToCheckout / Math.max(1, agents.length)) * 100,
+  );
 
   const surfaces = buildSurfaces({
     agents,
@@ -84,7 +88,7 @@ export default function CheckScreen() {
   const stats: [string, string][] = [
     ["Elapsed", secondsLabel(elapsed)],
     ["Agents settled", `${settled}/${agents.length}`],
-    ["Checkout hit rate", `${hitRate}%`],
+    ["Reached checkout unchallenged", `${throughRate}%`],
   ];
 
   return (
@@ -127,8 +131,9 @@ export default function CheckScreen() {
       {complete && !error && (
         <div className={styles.banner}>
           <div className={styles.bannerText}>
-            Simulation complete — {won} of {agents.length} agents completed a
-            purchase
+            {throughToCheckout === 0
+              ? `Simulation complete — every one of the ${agents.length} agents was stopped before checkout`
+              : `Simulation complete — ${throughToCheckout} of ${agents.length} bot agents completed a purchase unchallenged`}
           </div>
           <Button
             className={styles.bannerPrimary}
@@ -268,19 +273,22 @@ export default function CheckScreen() {
       )}
 
       <SectionLabel className={styles.stagesLabel}>
-        Journey stages · agents reaching each
+        Journey stages · bots still through at each · fewer is better
       </SectionLabel>
       <div className={styles.stages}>
         {STAGES.map((stage, stageIndex) => {
           const reached = agents.filter((a) => a.progress >= stageIndex + 1).length;
-          const blocked = agents.filter(
+          const stopped = agents.filter(
             (a) => a.fail === stageIndex + 1 && a.settled,
           ).length;
+          // Emphasis marks the stage that let everyone past, not the one that
+          // held. A stage nobody was stopped at is the gap worth looking at.
+          const unguarded = stopped === 0 && reached === agents.length;
           return (
             <div
               key={stage}
               className={`${styles.stageCard} ${
-                blocked > 0 ? styles.stageCardBlocked : ""
+                unguarded ? styles.stageCardUnguarded : ""
               }`}
             >
               <div className={styles.stageTop}>
@@ -296,10 +304,10 @@ export default function CheckScreen() {
                 fill={SURFACE_COLORS.browse!}
               />
               <div className={styles.stageNote}>
-                {blocked > 0
-                  ? `${blocked} blocked here`
+                {stopped > 0
+                  ? `${stopped} stopped here`
                   : reached === agents.length
-                    ? "clean"
+                    ? "nothing stopped here"
                     : "in flight"}
               </div>
             </div>
@@ -331,7 +339,7 @@ export default function CheckScreen() {
           <div
             key={agent.id}
             className={`${styles.boardRow} ${
-              agent.blocked ? styles.boardRowBlocked : ""
+              agent.ok ? styles.boardRowThrough : ""
             }`}
           >
             <div className={styles.boardAgent}>
@@ -348,6 +356,8 @@ export default function CheckScreen() {
               className={styles.boardTrack}
               count={30}
               fraction={agent.progress / STAGES.length}
+              // A stopped agent goes quiet; one that walked the whole journey
+              // takes full ink, because that is the row to look at.
               fill={agent.blocked ? "var(--blocked)" : agent.persona.color}
             />
             <div
@@ -356,9 +366,9 @@ export default function CheckScreen() {
               }`}
             >
               {agent.blocked
-                ? `blocked · ${STAGES[agent.fail - 1]}`
+                ? `stopped · ${STAGES[agent.fail - 1]}`
                 : agent.ok
-                  ? "checkout complete"
+                  ? "through · unchallenged"
                   : `${STAGES[Math.min(5, agent.progress)]}…`}
             </div>
           </div>

@@ -13,7 +13,12 @@ import {
   exportBasename,
   type RunExport,
 } from "@/lib/export";
-import { overallScore, verdictFor } from "@/lib/readiness";
+import {
+  exposureScore,
+  exposureVerdictFor,
+  overallScore,
+  verdictFor,
+} from "@/lib/readiness";
 import { useRun } from "@/lib/run-context";
 import type { Severity } from "@/lib/types";
 import styles from "./recommend.module.css";
@@ -56,8 +61,11 @@ export default function RecommendScreen() {
     catalogueCount,
   } = useRun();
 
-  const score = overallScore(surfaces);
-  const verdict = verdictFor(score);
+  // The headline is the bot-defence reading; the surface mean is a separate
+  // fact and keeps its own label on the cards below.
+  const score = exposureScore(agents);
+  const verdict = exposureVerdictFor(score);
+  const surfaceScore = overallScore(surfaces);
   const settled = agents.filter((a) => a.settled);
   const completed = agents.filter((a) => a.ok).length;
   const blocked = settled.filter((a) => a.blocked);
@@ -68,7 +76,11 @@ export default function RecommendScreen() {
       storeUrl: input.storeUrl,
       exportedAt: new Date().toISOString(),
       catalogueCount,
-      readiness: { score, verdict },
+      defence: { score, verdict },
+      surfaceReadability: {
+        score: surfaceScore,
+        verdict: verdictFor(surfaceScore),
+      },
       agents: agents.map((a) => ({
         id: a.id,
         persona: a.persona.name,
@@ -96,7 +108,7 @@ export default function RecommendScreen() {
       <div className={styles.column}>
         <div className={styles.scoreHeader}>
           <div className={styles.scoreSide}>
-            <SectionLabel>AI readiness</SectionLabel>
+            <SectionLabel>Bot exposure</SectionLabel>
             <div className={styles.scoreValue}>
               <span className={styles.score}>{score}</span>
               <span className={styles.scoreMax}>/100</span>
@@ -108,10 +120,12 @@ export default function RecommendScreen() {
             <p className={styles.summary}>
               {settled.length === 0
                 ? "No agent has settled yet."
-                : `${completed} of ${agents.length} agents reached checkout.` +
-                  (blocked.length > 0
-                    ? ` ${blocked.length} were blocked, the first at ${blocked[0]?.reason ?? "an earlier stage"}.`
-                    : "")}
+                : completed === 0
+                  ? `Every one of the ${settled.length} settled agents was stopped before checkout.`
+                  : `${completed} of ${agents.length} bot agents completed a purchase unchallenged.` +
+                    (blocked.length > 0
+                      ? ` ${blocked.length} were stopped, the first at ${blocked[0]?.reason ?? "an earlier stage"}.`
+                      : " Nothing on the storefront interrupted any of them.")}
             </p>
             <div className={styles.summaryActions}>
               <Button onClick={() => exportAs("md")}>Export report</Button>
@@ -134,6 +148,12 @@ export default function RecommendScreen() {
           </div>
         </div>
 
+        {/* A separate measurement from the headline: what a crawler can
+            parse, which is not the same question as whether a bot gets
+            through. Labelled so the two are not read as one score. */}
+        <SectionLabel className={styles.matrixLabel}>
+          Machine readability · from the fetch audit
+        </SectionLabel>
         <div className={styles.surfaces}>
           {surfaces.map((surface) => (
             <div key={surface.name} className={styles.surfaceCard}>
@@ -153,7 +173,7 @@ export default function RecommendScreen() {
         </div>
 
         <SectionLabel className={styles.matrixLabel}>
-          Where each brief died
+          How far each brief got before something stopped it
         </SectionLabel>
         <div className={styles.matrix}>
           <div className={styles.matrixHead}>
@@ -208,12 +228,12 @@ export default function RecommendScreen() {
           })}
 
           <div className={styles.matrixFoot}>
-            2 agents per brief · glyph shows how many cleared the stage
+            2 agents per brief · glyph shows how many got through · fewer is better
           </div>
         </div>
 
         <SectionLabel className={styles.findingsLabel}>
-          Recommendations · ordered by agents unblocked
+          Recommendations · ordered by agents let through
         </SectionLabel>
         <div className={styles.findings}>
           {findings.map((finding) => {
