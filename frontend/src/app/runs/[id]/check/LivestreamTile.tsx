@@ -108,7 +108,13 @@ export function LivestreamTile({
         </span>
       </Link>
 
-      {brief && <div className={styles.brief}>“{brief}”</div>}
+      {brief && (
+        // Titled as well as clamped: a brief long enough to still overflow
+        // three lines is readable on hover rather than lost.
+        <div className={styles.brief} title={brief}>
+          “{brief}”
+        </div>
+      )}
 
       <div className={styles.urlBar}>
         <span className={styles.dots}>
