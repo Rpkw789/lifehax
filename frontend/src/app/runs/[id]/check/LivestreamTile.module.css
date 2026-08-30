@@ -277,16 +277,23 @@
 /*
  * The agent's own brief. Two agents share an archetype but never a brief, and
  * without this the tiles look identical even when the shoppers are not.
+ *
+ * A brief is a sentence or two, and one clamped line of it reads as a fragment
+ * — the constraint that actually explains the agent's behaviour ("under $20")
+ * is usually the part that gets cut. Three lines fits a typical brief whole at
+ * the tile's narrowest column; anything longer still clamps, and the full text
+ * is on the element's title.
  */
 .brief {
-  padding: 5px 9px 6px;
+  padding: 6px 9px 7px;
   border-bottom: 1px solid var(--hairline);
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink);
   background: var(--soft);
+  text-wrap: pretty;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
