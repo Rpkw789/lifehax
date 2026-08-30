@@ -5,6 +5,7 @@ export interface AppConfig {
   runBudgetMs: number;
   cloudflareAccountId: string | null;
   cloudflareApiToken: string | null;
+  cloudflareGatewayId: string | null;
   cloudflareModel: "anthropic/claude-opus-4.8";
   nativeModel: "claude-opus-5";
 }
@@ -23,6 +24,7 @@ export function readConfig(env: Environment = process.env): AppConfig {
     runBudgetMs: positiveInteger(env.RUN_BUDGET_MS, 300_000, "RUN_BUDGET_MS"),
     cloudflareAccountId: nonEmptyOrNull(env.CLOUDFLARE_ACCOUNT_ID),
     cloudflareApiToken: nonEmptyOrNull(env.CLOUDFLARE_API_TOKEN),
+    cloudflareGatewayId: nonEmptyOrNull(env.CLOUDFLARE_GATEWAY_ID),
     cloudflareModel: "anthropic/claude-opus-4.8",
     nativeModel: "claude-opus-5",
   };

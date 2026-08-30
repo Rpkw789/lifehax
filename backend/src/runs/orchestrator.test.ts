@@ -95,6 +95,7 @@ function dependencies(saved: unknown[], agent: ShopperAgent): SimulationDependen
       runBudgetMs: 2_000,
       cloudflareAccountId: "account",
       cloudflareApiToken: "token",
+      cloudflareGatewayId: "gw",
       cloudflareModel: "anthropic/claude-opus-4.8",
       nativeModel: "claude-opus-5",
     },

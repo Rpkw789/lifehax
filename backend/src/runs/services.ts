@@ -37,11 +37,12 @@ export function createSimulationDependencies(
 }
 
 function sharedAgent(config: AppConfig): SharedSearchAgent {
-  if (!config.cloudflareAccountId || !config.cloudflareApiToken) {
-    throw new Error("shared search requires Cloudflare account configuration");
+  if (!config.cloudflareAccountId || !config.cloudflareApiToken || !config.cloudflareGatewayId) {
+    throw new Error("shared search requires Cloudflare account, token and gateway id");
   }
   return new SharedSearchAgent(new CloudflareWebSearchClient({
     accountId: config.cloudflareAccountId,
+    gatewayId: config.cloudflareGatewayId,
     apiToken: config.cloudflareApiToken,
   }));
 }

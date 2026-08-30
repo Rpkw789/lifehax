@@ -5,13 +5,16 @@ import { CloudflareWebSearchClient } from "./cloudflare.ts";
 
 test("CloudflareWebSearchClient separates cited search from structured ranking", async () => {
   let requestUrl = "";
+  let requestHeaders = new Headers();
   const requestBodies: Array<Record<string, unknown>> = [];
   const fetched: string[] = [];
   const client = new CloudflareWebSearchClient({
     accountId: "account",
+    gatewayId: "gw",
     apiToken: "secret-token",
     transport: async (url, init) => {
       requestUrl = String(url);
+      requestHeaders = new Headers(init?.headers);
       requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       return new Response(requestBodies.length === 1 ? searchSseMessage() : rankingSseMessage(), { status: 200, headers: { "content-type": "text/event-stream" } });
     },
@@ -29,7 +32,12 @@ test("CloudflareWebSearchClient separates cited search from structured ranking",
     signal: new AbortController().signal,
   });
 
-  assert.equal(requestUrl, "https://api.cloudflare.com/client/v4/accounts/account/ai/v1/messages");
+  assert.equal(requestUrl, "https://gateway.ai.cloudflare.com/v1/account/gw/anthropic/v1/messages");
+  // The gateway reads cf-aig-authorization; a token on `authorization` is read
+  // as the provider credential and rejected with a bare 401.
+  assert.equal(requestHeaders.get("cf-aig-authorization"), "Bearer secret-token");
+  assert.equal(requestHeaders.get("authorization"), null);
+  assert.equal(requestHeaders.get("anthropic-version"), "2023-06-01");
   assert.equal(requestBodies.length, 2);
   assert.equal(requestBodies[0]?.stream, true);
   assert.equal((requestBodies[0]?.tools as Array<{ type: string }>)[0]?.type, "web_search_20250305");
@@ -47,6 +55,7 @@ test("CloudflareWebSearchClient retries one transient gateway response", async (
   let calls = 0;
   const client = new CloudflareWebSearchClient({
     accountId: "account",
+    gatewayId: "gw",
     apiToken: "secret-token",
     transport: async () => {
       calls += 1;
@@ -63,6 +72,7 @@ test("CloudflareWebSearchClient does not retry a permanent client error", async 
   let calls = 0;
   const client = new CloudflareWebSearchClient({
     accountId: "account",
+    gatewayId: "gw",
     apiToken: "secret-token",
     transport: async () => {
       calls += 1;

@@ -1,9 +1,19 @@
 import type { MessageCreateParams } from "@anthropic-ai/sdk/resources/messages/messages";
+import { anthropicMessagesUrl, gatewayHeaders } from "../models/gateway.ts";
 import { fetchCitedStorePages, parseAnthropicProposalContent, parseAnthropicResearch, rankingPrompt, SHOPPER_OUTPUT_SCHEMA, shopperPrompt } from "./proposal.ts";
 import type { WebSearchClient, WebSearchRequest, WebSearchResponse } from "./types.ts";
 
+/**
+ * These calls take the gateway's Anthropic passthrough, not `/compat`.
+ *
+ * `web_search` is an Anthropic server-side tool and `thinking` is an Anthropic
+ * request field; neither survives translation to the OpenAI schema, and the
+ * search results are the measurement. `parseSseContent` below reads Anthropic
+ * stream events for the same reason. Plain generation uses compat — `llm.ts`.
+ */
 interface CloudflareOptions {
   accountId: string;
+  gatewayId: string;
   apiToken: string;
   transport?: HttpTransport;
 }
@@ -11,12 +21,15 @@ interface CloudflareOptions {
 type HttpTransport = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export class CloudflareWebSearchClient implements WebSearchClient {
-  readonly #accountId: string;
+  readonly #endpoint: string;
   readonly #apiToken: string;
   readonly #transport: HttpTransport;
 
   constructor(options: CloudflareOptions) {
-    this.#accountId = options.accountId;
+    this.#endpoint = anthropicMessagesUrl({
+      accountId: options.accountId,
+      gatewayId: options.gatewayId,
+    });
     this.#apiToken = options.apiToken;
     this.#transport = options.transport ?? fetch;
   }
@@ -45,15 +58,14 @@ export class CloudflareWebSearchClient implements WebSearchClient {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let response: Response;
       try {
-        response = await this.#transport(
-          `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.#accountId)}/ai/v1/messages`,
-          {
-            method: "POST",
-            signal,
-            headers: { authorization: `Bearer ${this.#apiToken}`, "content-type": "application/json" },
-            body: JSON.stringify(params),
-          },
-        );
+        response = await this.#transport(this.#endpoint, {
+          method: "POST",
+          signal,
+          // `anthropic-version` is required by the passthrough. The provider key
+          // slot stays empty: Unified Billing supplies it at the gateway.
+          headers: { ...gatewayHeaders(this.#apiToken), "anthropic-version": "2023-06-01" },
+          body: JSON.stringify(params),
+        });
       } catch (error) {
         if (attempt === 0 && !signal.aborted) continue;
         throw error;

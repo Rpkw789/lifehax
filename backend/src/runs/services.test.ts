@@ -12,7 +12,11 @@ const sinks = {
 test("createSimulationDependencies builds the configured shared-search agent", () => {
   const dependencies = createSimulationDependencies(
     { agentKind: "shared-search", personaApiKey: "server-key" },
-    readConfig({ CLOUDFLARE_ACCOUNT_ID: "account", CLOUDFLARE_API_TOKEN: "token" }),
+    readConfig({
+      CLOUDFLARE_ACCOUNT_ID: "account",
+      CLOUDFLARE_API_TOKEN: "token",
+      CLOUDFLARE_GATEWAY_ID: "gateway",
+    }),
     "https://shop.example",
     sinks,
   );

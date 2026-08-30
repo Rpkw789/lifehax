@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { completeJson, completeOpenAiJson, LlmError } from "./llm.ts";
 
 describe("completeJson", () => {
-  test("uses the Cloudflare account messages endpoint and provider-prefixed model", async () => {
+  test("uses the AI Gateway compat endpoint and provider-prefixed model", async () => {
     let capturedUrl = "";
     let capturedHeaders = new Headers();
     let capturedBody: Record<string, unknown> = {};
@@ -15,6 +15,7 @@ describe("completeJson", () => {
       {
         accountId: "account-1",
         apiToken: "token-1",
+        gatewayId: "gw-1",
         model: "anthropic/claude-sonnet-4-5",
         transport: async (input, init) => {
           capturedUrl = String(input);
@@ -24,17 +25,24 @@ describe("completeJson", () => {
             unknown
           >;
           return Response.json({
-            content: [{ type: "text", text: '{"ok":true}' }],
+            choices: [{ message: { content: '{"ok":true}' } }],
           });
         },
       },
     );
 
     expect(capturedUrl).toBe(
-      "https://api.cloudflare.com/client/v4/accounts/account-1/ai/v1/messages",
+      "https://gateway.ai.cloudflare.com/v1/account-1/gw-1/compat/chat/completions",
     );
-    expect(capturedHeaders.get("authorization")).toBe("Bearer token-1");
+    // The Cloudflare token goes in cf-aig-authorization; `authorization` is the
+    // provider slot and putting our token there is what returned a bare 401.
+    expect(capturedHeaders.get("cf-aig-authorization")).toBe("Bearer token-1");
+    expect(capturedHeaders.get("authorization")).toBeNull();
     expect(capturedBody.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(capturedBody.messages).toEqual([
+      { role: "system", content: "Return JSON.\n\nReturn only one JSON value matching this JSON Schema:\n\n{\"type\":\"object\"}" },
+      { role: "user", content: "Evaluate evidence." },
+    ]);
     expect(result).toEqual({ ok: true });
   });
 
@@ -48,14 +56,16 @@ describe("completeJson", () => {
       {
         accountId: "account-1",
         apiToken: "token-1",
+        gatewayId: "gw-1",
         model: "anthropic/claude-sonnet-4-5",
         transport: async (_input, init) => {
           bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
           return Response.json({
-            content: [
+            choices: [
               {
-                type: "text",
-                text: bodies.length === 1 ? "not json" : '{"ok":true}',
+                message: {
+                  content: bodies.length === 1 ? "not json" : '{"ok":true}',
+                },
               },
             ],
           });
@@ -77,6 +87,7 @@ describe("completeJson", () => {
       {
         accountId: "account-1",
         apiToken: "token-1",
+        gatewayId: "gw-1",
         model: "anthropic/claude-sonnet-4-5",
         transport: async () =>
           new Response("Bearer token-1 was rejected", { status: 401 }),
@@ -98,10 +109,11 @@ describe("completeJson", () => {
       {
         accountId: "account-1",
         apiToken: "token-1",
+        gatewayId: "gw-1",
         signal: controller.signal,
         transport: async (_input, init) => {
           receivedSameSignal = init?.signal === controller.signal;
-          return Response.json({ content: [{ type: "text", text: "{}" }] });
+          return Response.json({ choices: [{ message: { content: "{}" } }] });
         },
       },
     );

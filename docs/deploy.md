@@ -19,8 +19,14 @@ Both services deploy from `render.yaml` at the repo root.
      proportionally more agents really browse; the backend sizes the population
      from the number of keys.
    - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_API_TOKEN` — a Cloudflare API token with **Account > Workers
-     AI > Read**. Third-party model usage is billed through Unified Billing.
+   - `CLOUDFLARE_API_TOKEN` — an **AI Gateway** token with **AI Gateway Run**,
+     created inside the gateway's own Settings. Not a general Cloudflare API
+     token and not a Workers AI one: the backend calls
+     `gateway.ai.cloudflare.com`, and a token scoped to anything else fails with
+     a bare `401` that says nothing about permissions. Third-party model usage
+     is billed through Unified Billing, so the account needs credits.
+   - `CLOUDFLARE_GATEWAY_ID` — the gateway's real name. `render.yaml` sets it,
+     but confirm it matches: an unset or wrong one 401s exactly like a bad token.
    - `OPENAI_API_KEY` — direct Responses API access for the ACP/UCP,
      `llms.txt`, and Web-search surface simulations, and optionally the real
      browser agents when `HAPPY2_AGENT_MODEL` selects an OpenAI model.

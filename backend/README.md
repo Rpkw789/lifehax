@@ -40,18 +40,38 @@ Gateway — the browser plan pays, and Browserbase picks the model. `OPENAI_API_
 plus `HAPPY2_AGENT_MODEL` (provider-prefixed, e.g. `openai/gpt-5.4-mini`) moves
 that onto our own account.
 
-Verify the gateway independently before blaming the app. This is the same
-endpoint and header `llm.ts` uses — note `cf-aig-authorization`, not
-`Authorization`:
+The backend uses two doors on the same gateway, and they are not
+interchangeable. Plain generation — briefs and findings, `llm.ts` — takes the
+OpenAI-compatible endpoint, where the model id carries a `{provider}/` prefix
+because that prefix is how the gateway routes:
+
+```sh
+curl -X POST \
+  "https://gateway.ai.cloudflare.com/v1/$CLOUDFLARE_ACCOUNT_ID/$CLOUDFLARE_GATEWAY_ID/compat/chat/completions" \
+  -H "cf-aig-authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"anthropic/claude-sonnet-4-5","max_tokens":64,
+       "messages":[{"role":"user","content":"say hi"}]}'
+```
+
+The shopper agents (`agents/cloudflare.ts`) take the Anthropic passthrough
+instead, because `web_search` is an Anthropic server-side tool with no
+OpenAI-schema equivalent — routing them through compat would silently drop the
+retrieval the whole measurement rests on:
 
 ```sh
 curl -X POST \
   "https://gateway.ai.cloudflare.com/v1/$CLOUDFLARE_ACCOUNT_ID/$CLOUDFLARE_GATEWAY_ID/anthropic/v1/messages" \
   -H "cf-aig-authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   -H "anthropic-version: 2023-06-01" -H "Content-Type: application/json" \
-  -d '{"model":"claude-sonnet-5","max_tokens":64,
+  -d '{"model":"claude-sonnet-4-5","max_tokens":64,
        "messages":[{"role":"user","content":"say hi"}]}'
 ```
+
+Note `cf-aig-authorization`, not `Authorization`, on both. `Authorization` is
+the *provider* credential slot — under Unified Billing the gateway fills that
+itself, and putting the Cloudflare token there is read as a bad provider key and
+returns a bare 401 with nothing in the body to explain it.
 
 ## API
 
