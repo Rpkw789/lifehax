@@ -31,8 +31,20 @@ API token, which fails with a bare `401` that says nothing about permissions.
 `CLOUDFLARE_GATEWAY_ID` must be the gateway's real name; `default` only works if
 a gateway is literally called that. Account id from `npx wrangler whoami`.
 
-Browserbase's free tier is 3 concurrent browsers and 5 session requests per
-minute per account, which is why `HAPPY2_REAL_AGENTS` defaults to 3.
+The Developer plan is 25 concurrent browsers, but the limit that actually binds
+is the REST one: 25 requests per rolling minute. Starting an agent spends three
+of them — the extension Stagehand uploads before every launch, the session
+create, and our live-view lookup — so `HAPPY2_REAL_AGENTS` defaults to 8, which
+is 24 requests. Nine is 27 and the tail of the burst comes back 429. The free
+tier is 3 concurrent browsers and 5 session requests per minute per account;
+fall back to pooled free keys and you want `HAPPY2_REAL_AGENTS=3` per key.
+
+Every one of those failures reads `Failed to create a Browserbase session`.
+Stagehand catches the error and rethrows without the status, so a 429, a 402
+from an account out of browser minutes, and a bad key are indistinguishable
+from the log. Diagnose it against the API directly — `GET /v1/sessions` returns
+the rate-limit headers and `/v1/projects/:id/usage` the minutes remaining —
+rather than reading anything into the message.
 
 A real agent's `act` and `observe` calls are a second, separate model spend from
 the Cloudflare gateway above. Left unconfigured they run on Browserbase's Model
