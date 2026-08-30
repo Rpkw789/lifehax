@@ -1,9 +1,11 @@
 /**
- * The run funnel: how many agents survive each stage of the journey.
+ * The run funnel: how many bot agents get past each stage of the journey.
  *
- * The shape is the diagnosis — the widest drop is the stage to fix first — so
- * each step also carries the reason agents were blocked entering it, taken
- * from what the agents themselves reported.
+ * The shape is the diagnosis, read inverted: a wide drop is the storefront
+ * successfully stopping automation, and a funnel that barely narrows is a site
+ * that lets bots walk to checkout. Each step carries the reason agents were
+ * stopped entering it, taken from what the agents themselves reported — which
+ * is also the list of defences that currently work.
  */
 
 import { STAGES } from "./fixtures";
@@ -25,11 +27,11 @@ export interface FunnelStep {
   label: string;
   /** Agents that reached this step. */
   count: number;
-  /** Agents lost entering it. Always 0 for the first step. */
+  /** Agents stopped entering it — a defence that held. 0 for the first step. */
   lost: number;
   /** Share of the starting cohort, for the track fill. 0 when nothing ran. */
   fraction: number;
-  /** Why agents were blocked here, in their own words. Null when none were. */
+  /** Why agents were stopped here, in their own words. Null when none were. */
   reason: string | null;
 }
 
@@ -55,13 +57,13 @@ export function funnelFromAgents(agents: AgentState[]): FunnelStep[] {
       count,
       lost: i === 0 ? 0 : Math.max(0, previous - count),
       fraction: total === 0 ? 0 : count / total,
-      // An agent is blocked at the stage it could not enter, which is `fail`.
+      // An agent is stopped at the stage it could not enter, which is `fail`.
       reason: i === 0 ? null : dominantReason(agents, i),
     };
   });
 }
 
-/** The most common reason among agents that settled blocked at `stage`. */
+/** The most common reason among agents the store stopped at `stage`. */
 function dominantReason(agents: AgentState[], stage: number): string | null {
   const tally = new Map<string, number>();
 

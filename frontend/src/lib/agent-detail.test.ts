@@ -104,15 +104,16 @@ describe("journeyOf", () => {
 });
 
 describe("outcomeOf", () => {
-  test("reports checkout reached for an agent that completed", () => {
+  test("an agent that walked to checkout is the failure, not the success", () => {
     const outcome = outcomeOf(agent("A01", 6));
-    expect(outcome.tone).toBe("ok");
+    expect(outcome.tone).toBe("fail");
     expect(outcome.headline).toContain("checkout");
+    expect(outcome.headline).toContain("unchallenged");
   });
 
-  test("names the stage and the reason for a blocked agent", () => {
+  test("an agent the store stopped reads as the store working", () => {
     const outcome = outcomeOf(agent("A02", 2, 3, "specs live only inside product images"));
-    expect(outcome.tone).toBe("fail");
+    expect(outcome.tone).toBe("ok");
     expect(outcome.headline).toContain("read");
     expect(outcome.headline).toContain("specs live only inside product images");
   });

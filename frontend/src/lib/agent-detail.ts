@@ -77,6 +77,11 @@ export function journeyOf(agent: AgentState, events: AgentEvent[]): JourneyStep[
 
 export interface Outcome {
   headline: string;
+  /**
+   * Read inverted, like everything else on this run. "ok" is the storefront
+   * doing its job — an agent it stopped; "fail" is a bot that walked to
+   * checkout with nothing in its way.
+   */
   tone: "ok" | "fail" | "muted";
 }
 
@@ -84,14 +89,14 @@ export interface Outcome {
 export function outcomeOf(agent: AgentState): Outcome {
   if (agent.blocked) {
     return {
-      headline: `blocked at ${STAGES[agent.fail - 1]} — ${agent.reason ?? "no reason given"}`,
-      tone: "fail",
+      headline: `stopped at ${STAGES[agent.fail - 1]} — ${agent.reason ?? "no reason given"}`,
+      tone: "ok",
     };
   }
   if (agent.ok) {
     return {
-      headline: "checkout reached · no payment details entered",
-      tone: "ok",
+      headline: "reached checkout unchallenged · no payment details entered",
+      tone: "fail",
     };
   }
   if (agent.progress === 0) {
@@ -101,7 +106,7 @@ export function outcomeOf(agent: AgentState): Outcome {
 }
 
 export interface Stop {
-  /** The status itself, short enough for a chip: "blocked at cart". */
+  /** The status itself, short enough for a chip: "stopped at cart". */
   label: string;
   /** What was observed — the backend's reason, or the state it is still in. */
   detail: string;
@@ -118,16 +123,16 @@ export interface Stop {
 export function stopOf(agent: AgentState): Stop {
   if (agent.blocked) {
     return {
-      label: `blocked at ${STAGES[agent.fail - 1]}`,
+      label: `stopped at ${STAGES[agent.fail - 1]}`,
       detail: agent.reason ?? "no reason given",
-      tone: "fail",
+      tone: "ok",
     };
   }
   if (agent.ok) {
     return {
-      label: "checkout reached",
+      label: "through unchallenged",
       detail: "no payment details entered",
-      tone: "ok",
+      tone: "fail",
     };
   }
   if (agent.progress === 0) {

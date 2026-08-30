@@ -6,7 +6,8 @@ const run: RunExport = {
   storeUrl: "https://example.com",
   exportedAt: "2026-08-29T12:00:00.000Z",
   catalogueCount: 12,
-  readiness: { score: 35, verdict: "Partially reachable" },
+  defence: { score: 35, verdict: "Weak" },
+  surfaceReadability: { score: 30, verdict: "Barely readable" },
   agents: [
     { id: "A01", persona: "Bargain hunter", stagesCleared: 6, outcome: "completed" },
     { id: "A02", persona: "Spec matcher", stagesCleared: 4, outcome: "blocked", reason: "no cart form" },
@@ -42,10 +43,10 @@ describe("buildRunJson", () => {
 describe("buildFindingsMarkdown", () => {
   const md = buildFindingsMarkdown(run);
 
-  test("leads with the store and the readiness score", () => {
+  test("leads with the store and the bot-exposure score", () => {
     expect(md).toContain("https://example.com");
     expect(md).toContain("35/100");
-    expect(md).toContain("Partially reachable");
+    expect(md).toContain("Weak");
   });
 
   test("gives every finding a heading, its evidence and its fix", () => {

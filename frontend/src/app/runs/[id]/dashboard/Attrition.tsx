@@ -8,7 +8,12 @@ import { ramp } from "@/lib/tokens";
 import styles from "./Attrition.module.css";
 
 /**
- * Where AI shoppers are lost.
+ * How far the bot population got before the storefront stopped it.
+ *
+ * Read downward: a row that loses agents is the site defending itself, and the
+ * count still lit at the bottom is how many completed a purchase with nothing
+ * standing in the way. The widest drop is the defence that is working, not a
+ * problem to fix.
  *
  * One chevron per agent: seven lit and three dark is countable, which a filled
  * bar is not. Stage colour comes from the same amber-to-red ramp the stepper
@@ -44,13 +49,13 @@ export function Attrition({ steps, total }: { steps: FunnelStep[]; total: number
         {total === 0
           ? "No agents ran."
           : completed === 0
-            ? "No AI shopper reached checkout."
-            : `${completed} of ${total} AI shoppers reached checkout.`}
+            ? "No bot agent reached checkout."
+            : `${completed} of ${total} bot agents reached checkout unchallenged.`}
       </p>
       <p className={styles.sub}>
         {lost > 0
-          ? `${lost} stopped earlier. Each row shows who was left.`
-          : "Every agent completed the journey."}
+          ? `${lost} were stopped on the way. Each row shows where.`
+          : "Nothing on the storefront stopped a single agent."}
       </p>
 
       <ol className={styles.stream}>
