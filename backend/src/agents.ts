@@ -8,8 +8,11 @@
  * states something untrue about the store, but their pass/fail pattern is not a
  * measurement. Do not report them as one.
  *
- * Browserbase free tier is 3 concurrent browsers and 1 browser-hour total, so
- * REAL_AGENT_COUNT is 3 by design, not by accident.
+ * REAL_AGENT_COUNT is 8 because one Developer-plan key allows 25 REST requests
+ * a rolling minute and starting an agent spends three of them — see
+ * CONCURRENT_PER_KEY. The plan's 25 concurrent browsers are not the ceiling
+ * here; the request budget is. On the free tier it was 3, so a fallback to
+ * free keys means setting HAPPY2_REAL_AGENTS back down.
  */
 
 import { browserbase, Stagehand, type ModelName } from "@browserbasehq/stagehand";
@@ -22,19 +25,53 @@ import type { Catalogue, Checks, Persona, Run, StageNumber } from "./types";
 /**
  * Browserbase keys, pooled.
  *
- * Free tier allows three concurrent browsers per account, so several keys means
- * proportionally more real agents. Each key spends its own account's quota —
- * a teammate's hour runs out on their account, not yours.
+ * One Developer-plan key covers the whole population: that plan allows 25
+ * concurrent browsers, so the nine real agents fit inside a single account's
+ * quota with room to spare. The pool stays a list because the free-tier
+ * arrangement — several accounts at three concurrent browsers each — is what
+ * you fall back to when the paid key runs dry.
  *
  * Set BROWSERBASE_API_KEYS to a comma-separated list, or BROWSERBASE_API_KEY
  * for a single one. Keys are only ever referenced by index in logs.
  */
-const API_KEYS = (process.env.BROWSERBASE_API_KEYS ?? process.env.BROWSERBASE_API_KEY ?? "")
-  .split(",")
-  .map((k) => k.trim())
-  .filter(Boolean);
+const API_KEYS = [
+  ...new Set(
+    // Both names are read, rather than `??` between them. An env file that
+    // carries the plural as a bare `BROWSERBASE_API_KEYS=` — which is exactly
+    // what .env.example ships — has *set* it to the empty string, and `??`
+    // keeps an empty string. The singular would then never be consulted and
+    // the pool would come up empty with a perfectly good key sitting in it.
+    [process.env.BROWSERBASE_API_KEYS, process.env.BROWSERBASE_API_KEY]
+      .flatMap((v) => (v ?? "").split(","))
+      .map((k) => k.trim())
+      .filter(Boolean),
+  ),
+];
 
-const CONCURRENT_PER_KEY = 3;
+/**
+ * Real agents we ask of each key by default.
+ *
+ * The binding limit is not the Developer plan's 25 concurrent browsers — it is
+ * the REST rate limit, which is also 25 requests per rolling minute. Starting
+ * one agent spends three of them: the extension Stagehand uploads before every
+ * launch, the session create, and our own live-view lookup. Eight agents is 24
+ * requests and fits; nine is 27 and the tail of the burst comes back 429.
+ *
+ * Stagehand discards the status on a rejected create and raises a bare
+ * "Failed to create a Browserbase session", so going over the line costs you
+ * agents and tells you nothing about why. Free-tier keys cap at three
+ * concurrent browsers, so a fallback pool needs HAPPY2_REAL_AGENTS set down.
+ */
+const CONCURRENT_PER_KEY = 8;
+
+/**
+ * A launch still loses its window sometimes — a retried run, a second browser
+ * tab kicking off a run inside the same minute. The window is only a minute
+ * wide, so waiting it out costs one agent a slow start instead of the whole
+ * run an agent.
+ */
+const LAUNCH_ATTEMPTS = 3;
+const LAUNCH_BACKOFF_MS = 30_000;
 
 /**
  * The model behind `act` and `observe`, and the key it bills to.
@@ -188,6 +225,38 @@ const STAGE_DELAY_MS = Number(process.env.HAPPY2_STAGE_DELAY_MS ?? 0);
 
 /** Browsers are closed after the whole population settles, not per agent, so
  *  their live views stay valid for the length of the run. */
+/**
+ * `browserbase.launch`, with the rate limit survived rather than reported.
+ *
+ * Every failure arrives as the same "Failed to create a Browserbase session"
+ * with the HTTP status thrown away inside Stagehand, so there is nothing to
+ * branch on — a 429 and a bad key look identical from here. Retrying is right
+ * for the first and merely slow for the second, which is the better trade when
+ * the alternative is an agent that dies silently at stage one.
+ */
+async function launchBrowser(
+  apiKey: string,
+  agentId: string,
+): Promise<Awaited<ReturnType<typeof browserbase.launch>>> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await browserbase.launch({ apiKey });
+    } catch (err) {
+      if (attempt >= LAUNCH_ATTEMPTS) throw err;
+      // Jitter, so agents that lost the same window do not all come back at
+      // the same instant and lose the next one together.
+      const wait = LAUNCH_BACKOFF_MS + Math.floor(Math.random() * 5_000);
+      agentLog.warn(`${agentId} launch rejected, retrying`, {
+        attempt,
+        in: `${Math.round(wait / 1000)}s`,
+        // Stagehand keeps no cause; the message is the whole of what we get.
+        err: err instanceof Error ? err.message : String(err),
+      });
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
 export interface OpenBrowser {
   stagehand: Stagehand;
   browser: Awaited<ReturnType<typeof browserbase.launch>>;
@@ -225,7 +294,7 @@ async function runRealAgent(
 
   try {
     const launchedAt = Date.now();
-    const browser = await browserbase.launch({ apiKey });
+    const browser = await launchBrowser(apiKey, agentId);
     const stagehand = await Stagehand.create({
       browser,
       // Omitting `model` hands inference to Browserbase's Model Gateway on
